@@ -58,6 +58,7 @@
   .form-grid > div { display: flex; flex-direction: column; }
   .form-grid input, .form-grid select { width: 100%; }
   .row { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+  .hint { font-size: 12px; color: var(--text-muted); margin: 0 0 10px; }
 
   .filter-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   .filter-row select, .filter-row input { min-width: 140px; }
@@ -103,12 +104,24 @@
 
 <div class="toolbar">
   <button class="primary" id="toggleAddItem">교역품 등록</button>
+  <button class="primary" id="toggleAiScan">🤖 AI 스캔 등록</button>
   <span style="width:1px; background:var(--border-strong); align-self:stretch;"></span>
   <button class="primary" id="saveBtn">저장 (파일로 내보내기)</button>
   <button id="loadBtn">불러오기</button>
   <input type="file" id="loadFile" accept="application/json" style="display:none;">
   <button id="resetAll">전체 초기화</button>
   <span id="remoteStatus" style="font-size:12px;"></span>
+</div>
+
+<div class="panel" id="aiScanPanel" style="display:none;">
+  <h2>AI 스캔 등록</h2>
+  <p class="hint">스크린샷을 올리면 AI가 물품명·도시·시세·가격을 읽어서 해당 교역품의 "일괄 입력" 칸에 자동으로 채워줍니다. 반영 전에 반드시 눈으로 확인하고 각 교역품 카드의 "일괄 추가" 버튼을 직접 눌러야 최종 반영됩니다.</p>
+  <div id="aiScanDropzone" style="border:2px dashed var(--border-strong); border-radius:8px; padding:24px; text-align:center; cursor:pointer; background:var(--card);">
+    <div style="font-size:13px; color:var(--text-muted);">스크린샷 드래그 / 클릭해서 업로드 (여러 장 가능)</div>
+    <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">Ctrl+V로 붙여넣기도 가능 · PNG/JPG</div>
+  </div>
+  <input type="file" id="aiScanFileInput" accept="image/png,image/jpeg" multiple style="display:none;">
+  <div id="aiScanStatus" style="font-size:13px; color:var(--text-muted); margin-top:10px;"></div>
 </div>
 
 <div class="panel" id="addItemPanel" style="display:none;">
@@ -575,6 +588,7 @@ function makeItemCard(item) {
   );
 
   const bulkBox = document.createElement("div");
+  bulkBox.dataset.itemId = item.id;
   bulkBox.style.cssText = "margin-top:14px; padding-top:10px; border-top:1px dashed var(--border-strong);";
   bulkBox.onclick = (e) => e.stopPropagation();
   bulkBox.innerHTML =
@@ -652,18 +666,154 @@ document.getElementById("doAddItem").addEventListener("click", () => {
   const source = document.getElementById("itemSourceInput").value;
   const category = document.getElementById("itemCategoryInput").value;
   const origin = document.getElementById("itemOriginInput").value;
+  let newItemId = null;
   if (editingItemId != null) {
     const item = items.find(i => i.id === editingItemId);
     if (item) { item.name = name; item.source = source; item.category = category; item.origin = origin; }
   } else {
-    items.push({ id: nextItemId++, name, source, category, origin, sales: [] });
+    newItemId = nextItemId++;
+    items.push({ id: newItemId, name, source, category, origin, sales: [] });
   }
   hasUnsavedChanges = true;
   closeAddItemPanel();
   render();
+  // AI 스캔으로 새 품목을 만드는 흐름이었다면, 만든 직후 그 카드를 펼치고
+  // 스캔해둔 줄을 일괄입력 칸에 자동으로 채워준다 (등록은 여기서 안 하고 사용자가 확인 후 눌러야 함)
+  if (newItemId != null && pendingScanLines) {
+    openItemId = newItemId;
+    render();
+    fillBulkBoxWithScanLines(newItemId, pendingScanLines);
+    pendingScanLines = null;
+  }
 });
 document.getElementById("itemNameInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); document.getElementById("doAddItem").click(); }
+});
+
+// ── AI 스캔 등록 ──────────────────────────────────
+let pendingScanLines = null; // 새 품목 생성 대기 중일 때, 생성 직후 채워넣을 줄들
+
+function fillBulkBoxWithScanLines(itemId, linesText) {
+  // renderList()가 DOM을 새로 그리므로, 렌더 직후 한 틱 뒤에 찾아야 안전하다
+  setTimeout(() => {
+    const box = document.querySelector('[data-item-id="' + itemId + '"] .bulk-text-input');
+    if (box) {
+      box.value = linesText;
+      box.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, 0);
+}
+
+function rowsToLinesText(rows) {
+  return (rows || [])
+    .filter(r => r && r.city && r.price)
+    .map(r => r.city + "," + (r.marketRate != null ? r.marketRate : 100) + "," + r.price)
+    .join("\n");
+}
+
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      // "data:image/png;base64,AAAA..." 에서 콤마 뒷부분만
+      const result = reader.result;
+      const comma = result.indexOf(",");
+      resolve(result.slice(comma + 1));
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleAiScanFiles(files) {
+  const statusEl = document.getElementById("aiScanStatus");
+  const imageFiles = Array.from(files).filter(f => f.type === "image/png" || f.type === "image/jpeg");
+  if (imageFiles.length === 0) {
+    statusEl.textContent = "PNG 또는 JPG 이미지를 올려주세요.";
+    return;
+  }
+  statusEl.textContent = "이미지 분석 중... (" + imageFiles.length + "장)";
+
+  try {
+    const images = await Promise.all(imageFiles.map(async (f) => ({
+      mimeType: f.type,
+      data: await fileToBase64(f),
+    })));
+
+    const res = await fetch("/.netlify/functions/scan-trade-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ images }),
+    });
+    const json = await res.json();
+    if (!json.ok) {
+      statusEl.textContent = "분석 실패: " + (json.error || "알 수 없는 오류");
+      return;
+    }
+
+    const data = json.data || {};
+    const itemName = (data.itemName || "").trim();
+    const rows = data.rows || [];
+    if (rows.length === 0) {
+      statusEl.textContent = "도시별 가격 정보를 찾지 못했습니다. 다른 스크린샷으로 시도해주세요.";
+      return;
+    }
+    const linesText = rowsToLinesText(rows);
+
+    const matched = itemName
+      ? items.find(i => i.name.trim().toLowerCase() === itemName.toLowerCase())
+      : null;
+
+    if (matched) {
+      statusEl.textContent = "'" + matched.name + "'에 " + rows.length + "건을 찾아서 일괄입력 칸에 채워넣었습니다. 아래에서 확인 후 '일괄 추가'를 눌러주세요.";
+      openItemId = matched.id;
+      render();
+      fillBulkBoxWithScanLines(matched.id, linesText);
+    } else {
+      statusEl.textContent = "새 품목 '" + (itemName || "(이름 인식 실패)") + "'로 보입니다. 구분/분류/획득처를 입력하고 등록하면, 등록 직후 이 " + rows.length + "건이 자동으로 채워집니다.";
+      pendingScanLines = linesText;
+      document.getElementById("itemNameInput").value = itemName;
+      document.getElementById("addItemPanelTitle").textContent = "새 품목 등록 (AI 스캔)";
+      document.getElementById("doAddItem").textContent = "등록하기";
+      editingItemId = null;
+      document.getElementById("addItemPanel").style.display = "block";
+      document.getElementById("itemCategoryInput").focus();
+    }
+  } catch (e) {
+    statusEl.textContent = "오류가 발생했습니다: " + e;
+  }
+}
+
+document.getElementById("toggleAiScan").addEventListener("click", () => {
+  const el = document.getElementById("aiScanPanel");
+  el.style.display = el.style.display === "block" ? "none" : "block";
+});
+document.getElementById("aiScanDropzone").addEventListener("click", () => {
+  document.getElementById("aiScanFileInput").click();
+});
+document.getElementById("aiScanFileInput").addEventListener("change", (e) => {
+  if (e.target.files.length > 0) handleAiScanFiles(e.target.files);
+  e.target.value = "";
+});
+document.getElementById("aiScanDropzone").addEventListener("dragover", (e) => {
+  e.preventDefault();
+  e.currentTarget.style.background = "#f0ece2";
+});
+document.getElementById("aiScanDropzone").addEventListener("dragleave", (e) => {
+  e.currentTarget.style.background = "var(--card)";
+});
+document.getElementById("aiScanDropzone").addEventListener("drop", (e) => {
+  e.preventDefault();
+  e.currentTarget.style.background = "var(--card)";
+  if (e.dataTransfer.files.length > 0) handleAiScanFiles(e.dataTransfer.files);
+});
+window.addEventListener("paste", (e) => {
+  const panel = document.getElementById("aiScanPanel");
+  if (panel.style.display !== "block") return; // AI 스캔 패널이 열려있을 때만 붙여넣기 반응
+  const files = Array.from(e.clipboardData.items)
+    .filter(it => it.type.startsWith("image/"))
+    .map(it => it.getAsFile());
+  if (files.length > 0) handleAiScanFiles(files);
 });
 
 function attachAutocompleteEnter(input, datalistId, submitFn) {
