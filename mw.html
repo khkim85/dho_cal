@@ -70,7 +70,7 @@
     padding: 10px 14px; cursor: pointer; gap: 10px; flex-wrap: wrap;
   }
   .item-head:hover { background: #25282e; }
-  .item-title { font-size: 14px; font-weight: 600; }
+  .item-title { font-size: 14px; font-weight: 700; }
   .item-tags { display: flex; gap: 6px; flex-wrap: wrap; }
   .tag { font-size: 11px; border-radius: 4px; padding: 2px 7px; white-space: nowrap; }
   .tag.source-물물교환 { background: #22374a; color: #7ab3e0; }
@@ -86,9 +86,9 @@
   .sales-table-wrap { max-height: 320px; overflow-y: auto; overflow-x: auto; margin: 10px 0; border: 1px solid var(--border); border-radius: 6px; }
   table.sales-table { width: 100%; border-collapse: collapse; margin: 0; font-size: 13px; }
   table.sales-table th, table.sales-table td { text-align: center; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-  table.sales-table th { color: var(--text-muted); font-weight: 500; font-size: 11px; position: sticky; top: 0; background: var(--card); z-index: 1; }
+  table.sales-table th { color: var(--text-muted); font-weight: 700; font-size: 11px; position: sticky; top: 0; background: var(--card); z-index: 1; }
   table.sales-table tr.best-row { background: #3a2f1f; }
-  table.sales-table td.num { text-align: center; font-variant-numeric: tabular-nums; }
+  table.sales-table td.num { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
 
   .add-sale-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-top: 10px; align-items: end; }
   .add-sale-grid label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 3px; }
@@ -110,18 +110,18 @@
   }
   .hype-row.past { opacity: 0.45; }
   .hype-row.now { background: #3a2f1f; border-radius: 6px; }
-  .hype-time { width: 90px; flex-shrink: 0; font-variant-numeric: tabular-nums; color: var(--text-muted); }
-  .hype-region { width: 130px; flex-shrink: 0; font-weight: 600; }
-  .hype-kind { width: 70px; flex-shrink: 0; }
-  .hype-countdown { font-size: 12px; color: var(--accent); }
+  .hype-time { width: 90px; flex-shrink: 0; font-variant-numeric: tabular-nums; color: var(--text-muted); font-weight: 700; }
+  .hype-region { width: 130px; flex-shrink: 0; font-weight: 700; }
+  .hype-kind { width: 70px; flex-shrink: 0; font-weight: 700; }
+  .hype-countdown { font-size: 12px; color: var(--accent); font-weight: 700; }
 
   .boost-card { border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 12px 14px; margin-bottom: 10px; }
   .boost-card-head { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; flex-wrap: wrap; }
-  .boost-card-time { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-  .boost-card-region { font-weight: 600; font-size: 14px; }
-  .boost-card-kind { font-size: 12px; background: #2d3138; color: var(--accent); border-radius: 4px; padding: 2px 8px; }
+  .boost-card-time { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; font-weight: 700; }
+  .boost-card-region { font-weight: 700; font-size: 14px; }
+  .boost-card-kind { font-size: 12px; background: #2d3138; color: var(--accent); border-radius: 4px; padding: 2px 8px; font-weight: 700; }
   .boost-items { display: flex; flex-wrap: wrap; gap: 6px; }
-  .boost-item-chip { font-size: 12px; background: #23392a; color: #7ec996; border-radius: 5px; padding: 3px 9px; white-space: nowrap; }
+  .boost-item-chip { font-size: 12px; background: #23392a; color: #7ec996; border-radius: 5px; padding: 3px 9px; white-space: nowrap; font-weight: 600; }
   .boost-preview-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border-bottom: 1px solid var(--border); font-size: 13px; }
   .boost-preview-row input[type="checkbox"] { margin-top: 3px; }
 </style>
@@ -133,8 +133,7 @@
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
-  <button class="main-tab-btn" id="tabBtnHype">대유행</button>
-  <button class="main-tab-btn" id="tabBtnBoost">부양</button>
+  <button class="main-tab-btn" id="tabBtnSchedule">일정</button>
 </div>
 
 <div id="tabPanelPrice">
@@ -246,13 +245,13 @@
 <div class="item-list" id="itemList"></div>
 </div>
 
-<div id="tabPanelHype" style="display:none;">
+<div id="tabPanelSchedule" style="display:none;">
+  <h2 style="font-size:15px; margin:0 0 6px;">대유행</h2>
   <p class="hint">기준 시각으로부터 지난 2시간 ~ 앞으로 22시간(총 24시간) 동안의 대유행 일정입니다. 실측으로 확인된 종류별 고정 주기를 기반으로 계산합니다 (지난 데이터로 검증 완료, 예외 없음).</p>
   <div id="hypeNowLabel" style="font-size:13px; color:var(--text-muted); margin-bottom:10px;"></div>
   <div id="hypeList"></div>
-</div>
 
-<div id="tabPanelBoost" style="display:none;">
+  <h2 style="font-size:15px; margin:28px 0 6px; padding-top:16px; border-top:1px solid var(--border);">부양</h2>
   <div class="toolbar">
     <button class="primary" id="toggleBoostScan">🤖 AI 스캔 등록 (부양)</button>
     <span id="boostRemoteStatus" style="font-size:12px;"></span>
@@ -344,32 +343,20 @@ function renderHypeTab() {
 
 document.getElementById('tabBtnPrice').addEventListener('click', () => {
   document.getElementById('tabBtnPrice').classList.add('active');
-  document.getElementById('tabBtnHype').classList.remove('active');
-  document.getElementById('tabBtnBoost').classList.remove('active');
+  document.getElementById('tabBtnSchedule').classList.remove('active');
   document.getElementById('tabPanelPrice').style.display = '';
-  document.getElementById('tabPanelHype').style.display = 'none';
-  document.getElementById('tabPanelBoost').style.display = 'none';
+  document.getElementById('tabPanelSchedule').style.display = 'none';
 });
-document.getElementById('tabBtnHype').addEventListener('click', () => {
-  document.getElementById('tabBtnHype').classList.add('active');
+document.getElementById('tabBtnSchedule').addEventListener('click', () => {
+  document.getElementById('tabBtnSchedule').classList.add('active');
   document.getElementById('tabBtnPrice').classList.remove('active');
-  document.getElementById('tabBtnBoost').classList.remove('active');
   document.getElementById('tabPanelPrice').style.display = 'none';
-  document.getElementById('tabPanelHype').style.display = '';
-  document.getElementById('tabPanelBoost').style.display = 'none';
+  document.getElementById('tabPanelSchedule').style.display = '';
   renderHypeTab();
-});
-document.getElementById('tabBtnBoost').addEventListener('click', () => {
-  document.getElementById('tabBtnBoost').classList.add('active');
-  document.getElementById('tabBtnPrice').classList.remove('active');
-  document.getElementById('tabBtnHype').classList.remove('active');
-  document.getElementById('tabPanelPrice').style.display = 'none';
-  document.getElementById('tabPanelHype').style.display = 'none';
-  document.getElementById('tabPanelBoost').style.display = '';
   renderBoostList();
 });
 setInterval(() => {
-  if (document.getElementById('tabPanelHype').style.display !== 'none') renderHypeTab();
+  if (document.getElementById('tabPanelSchedule').style.display !== 'none') renderHypeTab();
 }, 60000);
 
 // ── 부양 탭 ────────────────────────────────────────
