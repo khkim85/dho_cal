@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>교역품 시세 조회</title>
+<title>교역품 판매처 기록 도구</title>
 <style>
   :root {
     --bg: #f4f1ea;
@@ -22,10 +22,11 @@
     padding: 24px;
   }
   h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  h2 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
   .sub { font-size: 13px; color: var(--text-muted); margin: 0 0 20px; }
 
   .toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-  input[type="text"], select {
+  input[type="text"], input[type="number"], select, textarea {
     font-family: inherit;
     font-size: 13px;
     padding: 8px 10px;
@@ -45,6 +46,18 @@
     cursor: pointer;
   }
   button:hover { background: #f0ece2; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #a3653f; }
+  button.small { padding: 4px 8px; font-size: 12px; }
+  button.danger { color: #b3402f; border-color: #d9b3a8; }
+  button.danger:hover { background: #f7e8e4; }
+
+  .panel { border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 14px; margin-bottom: 16px; }
+  .form-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .form-grid label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 3px; }
+  .form-grid > div { display: flex; flex-direction: column; }
+  .form-grid input, .form-grid select { width: 100%; }
+  .row { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
 
   .filter-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   .filter-row select, .filter-row input { min-width: 140px; }
@@ -63,7 +76,9 @@
   .tag.source-명산품 { background: #f3e0dc; color: #b3402f; }
   .tag.category { background: #ece6d8; color: var(--text-muted); }
   .tag.origin { background: #e0efe2; color: #3d8b52; }
-  .item-best { font-size: 12px; color: var(--accent); font-weight: 600; white-space: nowrap; }
+  .item-best {
+    font-size: 12px; color: var(--accent); font-weight: 600; white-space: nowrap;
+  }
   .item-body { display: none; padding: 0 14px 14px; border-top: 1px solid var(--border); }
   .item-body.open { display: block; }
 
@@ -74,26 +89,104 @@
   table.sales-table tr.best-row { background: #fdf3e9; }
   table.sales-table td.num { text-align: center; font-variant-numeric: tabular-nums; }
 
-  .calc-box { display: flex; gap: 6px; align-items: flex-end; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-strong); }
-  .calc-box label { font-size: 11px; color: var(--text-muted); display: block; }
+  .add-sale-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-top: 10px; align-items: end; }
+  .add-sale-grid label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 3px; }
+  .add-sale-grid input { width: 100%; }
 
   .empty-hint { font-size: 12px; color: var(--text-muted); padding: 12px 0; text-align: center; }
 </style>
 </head>
 <body>
 
-<h1>교역품 시세 조회</h1>
-<p class="sub">등록된 교역품과 지역/도시별 판매 기록을 조회합니다. (조회 전용 — 데이터 등록/수정은 관리자 페이지에서 합니다)</p>
+<h1>교역품 판매처 기록 도구</h1>
+<p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
 
 <div class="toolbar">
-  <button id="refreshBtn">새로고침</button>
+  <button class="primary" id="toggleAddItem">교역품 등록</button>
+  <span style="width:1px; background:var(--border-strong); align-self:stretch;"></span>
+  <button class="primary" id="saveBtn">저장 (파일로 내보내기)</button>
+  <button id="loadBtn">불러오기</button>
+  <input type="file" id="loadFile" accept="application/json" style="display:none;">
+  <button id="resetAll">전체 초기화</button>
   <span id="remoteStatus" style="font-size:12px;"></span>
+</div>
+
+<div class="panel" id="addItemPanel" style="display:none;">
+  <h2 id="addItemPanelTitle">교역품 등록</h2>
+  <div class="form-grid">
+    <div>
+      <label>이름</label>
+      <input type="text" id="itemNameInput" placeholder="예: 주니퍼 베리">
+    </div>
+    <div>
+      <label>구분</label>
+      <select id="itemSourceInput">
+        <option value="물물교환">물물교환</option>
+        <option value="명산품">명산품</option>
+      </select>
+    </div>
+    <div>
+      <label>분류</label>
+      <input type="text" id="itemCategoryInput" list="categoryOptions" placeholder="입력하면 자동완성">
+      <datalist id="categoryOptions">
+        <option value="식료품"></option>
+        <option value="조미료"></option>
+        <option value="가축"></option>
+        <option value="의약품"></option>
+        <option value="잡화"></option>
+        <option value="주류"></option>
+        <option value="염료"></option>
+        <option value="광석"></option>
+        <option value="공업품"></option>
+        <option value="기호품"></option>
+        <option value="섬유"></option>
+        <option value="직물"></option>
+        <option value="공예품"></option>
+        <option value="미술품"></option>
+        <option value="향신료"></option>
+        <option value="귀금속"></option>
+        <option value="향료"></option>
+        <option value="보석"></option>
+        <option value="무기류"></option>
+        <option value="총포류"></option>
+        <option value="기타"></option>
+      </datalist>
+    </div>
+    <div>
+      <label>획득처</label>
+      <input type="text" id="itemOriginInput" list="originOptions" placeholder="입력하면 자동완성">
+      <datalist id="originOptions">
+        <option value="북극"></option>
+        <option value="북해"></option>
+        <option value="서지중해 및 대서양"></option>
+        <option value="동지중해"></option>
+        <option value="서아프리카"></option>
+        <option value="남아프리카"></option>
+        <option value="동아프리카"></option>
+        <option value="아라비아&서인도"></option>
+        <option value="동인도&인도차이나"></option>
+        <option value="남아시아"></option>
+        <option value="동아시아"></option>
+        <option value="극동아시아"></option>
+        <option value="호주"></option>
+        <option value="동부 오세아니아"></option>
+        <option value="태평양"></option>
+        <option value="서아메리카"></option>
+        <option value="북아메리카&카리브해"></option>
+        <option value="남서부 아메리카"></option>
+      </datalist>
+    </div>
+  </div>
+  <div class="row">
+    <button class="primary" id="doAddItem">등록하기</button>
+    <button id="cancelAddItem">취소</button>
+  </div>
 </div>
 
 <div class="filter-row">
   <input type="text" id="searchInput" placeholder="이름 검색">
   <select id="filterSource">
-    <option value="">구분 전체</option>
+    <option value="">획득처 전체</option>
     <option value="물물교환">물물교환</option>
     <option value="명산품">명산품</option>
   </select>
@@ -151,67 +244,18 @@ function getSeasonBonus(city, category) {
   return UWO_DATA.GLOBAL_SEASON_DEFAULT[category] != null ? UWO_DATA.GLOBAL_SEASON_DEFAULT[category] : 0;
 }
 
-
-// ── 원격 조회 전용 (읽기 키만 보유 — 이 페이지에는 쓰기 권한이 없음) ──
-const REMOTE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzhRgZGT3nkrpNs6JqiOpUiMKTkcEEV29QMuDMuLZJwgdW1Ao_KeQR3t8yqRYmVp0yUFw/exec";
-const REMOTE_READ_KEY = "althor4";
-
 let items = [];
+let hasUnsavedChanges = false;
+let nextItemId = 1;
+let nextSaleId = 1;
+let openItemId = null;
+let editingSaleId = null;
+let editingItemId = null;
+
 let searchTerm = "";
 let filterSource = "";
 let filterCategory = "";
 let filterOrigin = "";
-
-function setRemoteStatusUI(status) {
-  const el = document.getElementById("remoteStatus");
-  if (!el) return;
-  const map = {
-    loading: ["불러오는 중...", "var(--text-muted)"],
-    ok: ["최신 데이터", "#3d8b52"],
-    error: ["불러오기 실패", "#b3402f"],
-  };
-  const [text, color] = map[status] || ["", ""];
-  el.textContent = text;
-  el.style.color = color;
-}
-
-async function loadFromRemote() {
-  setRemoteStatusUI("loading");
-  try {
-    const url = REMOTE_WEBAPP_URL + "?key=" + encodeURIComponent(REMOTE_READ_KEY);
-    const res = await fetch(url);
-    const json = await res.json();
-    if (!json.ok) { setRemoteStatusUI("error"); return false; }
-    const data = json.data || {};
-    items = data.items || [];
-    setRemoteStatusUI("ok");
-    return true;
-  } catch (e) {
-    setRemoteStatusUI("error");
-    return false;
-  }
-}
-
-function saleBonuses(sale, item) {
-  const regionBonus = getRegionBonus(sale.city, item.category, item.name);
-  const seasonBonus = getSeasonBonus(sale.city, item.category);
-  const marketBonus = sale.marketBonus != null && sale.marketBonus !== "" ? sale.marketBonus : 100;
-  return { regionBonus, seasonBonus, marketBonus };
-}
-function baseSalePrice(sale, item) {
-  const b = saleBonuses(sale, item);
-  return sale.price / (b.marketBonus / 100);
-}
-function itemIntrinsicValue(sale, item) {
-  const b = saleBonuses(sale, item);
-  const regionSeasonMultiplier = 1 + (b.regionBonus + b.seasonBonus) / 100;
-  const marketMultiplier = b.marketBonus / 100;
-  return sale.price / (regionSeasonMultiplier * marketMultiplier);
-}
-function bestSale(item) {
-  if (!item.sales || item.sales.length === 0) return null;
-  return item.sales.reduce((best, s) => (baseSalePrice(s, item) > baseSalePrice(best, item) ? s : best), item.sales[0]);
-}
 
 function render() {
   renderCategoryFilterOptions();
@@ -235,6 +279,8 @@ function renderCategoryFilterOptions() {
 }
 
 function renderList() {
+  saveToLocalStorage();
+  scheduleRemoteSave();
   const container = document.getElementById("itemList");
   container.innerHTML = "";
 
@@ -250,14 +296,50 @@ function renderList() {
   if (list.length === 0) {
     const hint = document.createElement("div");
     hint.className = "empty-hint";
-    hint.textContent = items.length === 0 ? "등록된 교역품이 없습니다." : "조건에 맞는 교역품이 없습니다.";
+    hint.textContent = items.length === 0
+      ? "위 '교역품 등록' 버튼으로 교역품을 추가하세요."
+      : "조건에 맞는 교역품이 없습니다.";
     container.appendChild(hint);
     return;
   }
+
   list.forEach(item => container.appendChild(makeItemCard(item)));
 }
 
-let openItemId = null;
+// 지역 우대(%) / 시즌 우대(%)는 "가산 보너스"라 서로 더해서 적용되지만,
+// 시세(%)는 게임 화면 표시 그대로 "100%가 기준(평소), 103%면 3%만 비쌈"인
+// 절대 지표라서 계산 방식이 다르다:
+//   가격 = 순수가치 × (1 + (지역우대+시즌우대)/100) × (시세/100)
+// 지역우대·시즌우대는 도시(→문화권)와 교역품(분류/이름)으로부터 자동 조회한다.
+//
+// "기준단가"(화면 표시용)는 시세%만 제외한 값 — 지역/시즌 우대는 그 도시·시기 고유의
+// 구조적인 값이라 보고, 일시적인 시세 변동만 걷어낸 게 "기준"이라는 정의.
+// 즉 "시세 100% 기준으로 환산했을 때의 가치"와 동일하다.
+// 반면 "순수가치"(itemIntrinsicValue)는 지역/시즌/시세를 전부 걷어낸, 도시와 무관한
+// 품목 고유값 추정치로, 계산기에서 "기록 없는 다른 도시"에 적용할 때만 내부적으로 쓴다.
+//
+// 시세%를 입력 안 하면 100(평소)으로 간주한다 — 0으로 취급하면 나누기 오류가 남.
+function saleBonuses(sale, item) {
+  const regionBonus = getRegionBonus(sale.city, item.category, item.name);
+  const seasonBonus = getSeasonBonus(sale.city, item.category);
+  const marketBonus = sale.marketBonus != null && sale.marketBonus !== "" ? sale.marketBonus : 100;
+  return { regionBonus, seasonBonus, marketBonus };
+}
+function baseSalePrice(sale, item) {
+  const b = saleBonuses(sale, item);
+  return sale.price / (b.marketBonus / 100);
+}
+function itemIntrinsicValue(sale, item) {
+  const b = saleBonuses(sale, item);
+  const regionSeasonMultiplier = 1 + (b.regionBonus + b.seasonBonus) / 100;
+  const marketMultiplier = b.marketBonus / 100;
+  return sale.price / (regionSeasonMultiplier * marketMultiplier);
+}
+
+function bestSale(item) {
+  if (!item.sales || item.sales.length === 0) return null;
+  return item.sales.reduce((best, s) => (baseSalePrice(s, item) > baseSalePrice(best, item) ? s : best), item.sales[0]);
+}
 
 function makeItemCard(item) {
   const card = document.createElement("div");
@@ -267,7 +349,9 @@ function makeItemCard(item) {
   head.className = "item-head";
 
   const left = document.createElement("div");
-  left.style.cssText = "display:flex; flex-direction:column; gap:4px;";
+  left.style.display = "flex";
+  left.style.flexDirection = "column";
+  left.style.gap = "4px";
   const title = document.createElement("div");
   title.className = "item-title";
   title.textContent = item.name;
@@ -289,54 +373,51 @@ function makeItemCard(item) {
 
   head.appendChild(left);
   head.appendChild(bestLabel);
-  head.onclick = () => { openItemId = (openItemId === item.id) ? null : item.id; renderList(); };
+  head.onclick = () => {
+    openItemId = (openItemId === item.id) ? null : item.id;
+    renderList();
+  };
 
   const body = document.createElement("div");
   body.className = "item-body" + (openItemId === item.id ? " open" : "");
 
-  const table = document.createElement("table");
-  table.className = "sales-table";
-  const bestId = best ? best.id : null;
-  const sortedSales = (item.sales || []).slice().sort((a, b) => baseSalePrice(b, item) - baseSalePrice(a, item));
-  table.innerHTML = "<tr><th>도시</th><th>지역</th><th>문화권</th><th>판매가</th><th>지역 우대%</th><th>시즌 우대%</th><th>시세%</th><th>기준단가</th><th>비고</th></tr>" +
-    sortedSales.map(s => {
-      const b = saleBonuses(s, item);
-      const region = getRegion(s.city) || "-";
-      const culture = getCulture(s.city) || "-";
-      return "<tr class='" + (s.id === bestId ? "best-row" : "") + "'>" +
-        "<td>" + s.city + "</td>" +
-        "<td>" + region + "</td>" +
-        "<td>" + culture + "</td>" +
-        "<td class='num'>" + s.price.toLocaleString() + "</td>" +
-        "<td class='num'>" + b.regionBonus + "%</td>" +
-        "<td class='num'>" + b.seasonBonus + "%</td>" +
-        "<td class='num'>" + b.marketBonus + "%</td>" +
-        "<td class='num'>" + Math.round(baseSalePrice(s, item)).toLocaleString() + "</td>" +
-        "<td>" + (s.note || "") + "</td>" +
-        "</tr>";
-    }).join("");
-  if (!item.sales || item.sales.length === 0) {
-    table.innerHTML += "<tr><td colspan='9' class='empty-hint'>기록된 판매처가 없습니다.</td></tr>";
-  }
-  const tableWrap = document.createElement("div");
-  tableWrap.className = "sales-table-wrap";
-  tableWrap.appendChild(table);
-  body.appendChild(tableWrap);
+  const delRow = document.createElement("div");
+  delRow.className = "row";
+  const editBtn = document.createElement("button");
+  editBtn.className = "small";
+  editBtn.textContent = "수정";
+  editBtn.onclick = (e) => {
+    e.stopPropagation();
+    openEditItem(item);
+  };
+  const delBtn = document.createElement("button");
+  delBtn.className = "small danger";
+  delBtn.textContent = "이 교역품 삭제";
+  delBtn.onclick = (e) => {
+    e.stopPropagation();
+    if (!confirm("'" + item.name + "' 교역품과 기록된 판매 정보를 모두 삭제할까요?")) return;
+    items = items.filter(i => i.id !== item.id);
+    hasUnsavedChanges = true;
+    render();
+  };
+  delRow.appendChild(editBtn);
+  delRow.appendChild(delBtn);
 
-  // 가격 계산기 (조회 전용 — 쓰기 없음)
   const calcId = "cityList-" + item.id;
   const calcBox = document.createElement("div");
-  calcBox.className = "calc-box";
+  calcBox.style.cssText = "display:flex; gap:6px; align-items:flex-end; flex-wrap:wrap; margin-left:auto;";
   calcBox.onclick = (e) => e.stopPropagation();
   calcBox.innerHTML =
-    "<div><label>도시 (아무 도시나 가능)</label><input type='text' class='calc-city-input' list='" + calcId + "' style='width:130px;'></div>" +
-    "<div><label>시세 %</label><input type='number' class='calc-market-input' style='width:70px;'></div>" +
-    "<button class='calc-btn'>계산</button>" +
+    "<div><label style='font-size:11px; color:var(--text-muted); display:block;'>도시 (아무 도시나 가능)</label><input type='text' class='calc-city-input' list='" + calcId + "' style='width:130px;'></div>" +
+    "<div><label style='font-size:11px; color:var(--text-muted); display:block;'>시세 %</label><input type='number' class='calc-market-input' style='width:70px;'></div>" +
+    "<button class='small primary calc-btn'>계산</button>" +
     "<span class='calc-result' style='font-size:12px; color:var(--text-muted);'></span>" +
     "<datalist id='" + calcId + "'></datalist>";
-  body.appendChild(calcBox);
+  delRow.appendChild(calcBox);
+  body.appendChild(delRow);
 
-  calcBox.querySelector("#" + calcId).innerHTML = UWO_DATA.ALL_CITIES.map(c => "<option value='" + c + "'></option>").join("");
+  const cityDatalist = calcBox.querySelector("#" + calcId);
+  cityDatalist.innerHTML = UWO_DATA.ALL_CITIES.map(c => "<option value='" + c + "'></option>").join("");
 
   calcBox.querySelector(".calc-btn").addEventListener("click", () => {
     const cityQuery = calcBox.querySelector(".calc-city-input").value.trim();
@@ -346,6 +427,7 @@ function makeItemCard(item) {
     if (!cityQuery) { resultSpan.textContent = "도시를 입력해주세요."; return; }
     const allSales = item.sales || [];
     if (allSales.length === 0) { resultSpan.textContent = "이 교역품에 기록된 판매가가 없습니다."; return; }
+    // 순수가치는 이 교역품의 전체 판매 기록 평균으로 추정 (도시와 무관한 품목 고유값이라는 가정)
     const avgBase = allSales.reduce((sum, s) => sum + itemIntrinsicValue(s, item), 0) / allSales.length;
     const regionBonus = getRegionBonus(cityQuery, item.category, item.name);
     const seasonBonus = getSeasonBonus(cityQuery, item.category);
@@ -357,19 +439,429 @@ function makeItemCard(item) {
       (culture ? ", 문화권:" + culture : "") + (region ? "/지역:" + region : "") + ")";
   });
 
+  const table = document.createElement("table");
+  table.className = "sales-table";
+  const bestId = best ? best.id : null;
+  const sortedSales = (item.sales || []).slice().sort((a, b) => baseSalePrice(b, item) - baseSalePrice(a, item));
+  table.innerHTML = "<tr><th>도시</th><th>지역</th><th>문화권</th><th>판매가</th><th>지역 우대%</th><th>시즌 우대%</th><th>시세%</th><th>기준단가</th><th>비고</th><th></th></tr>" +
+    sortedSales.map(s => {
+      const b = saleBonuses(s, item);
+      const region = getRegion(s.city) || "-";
+      const culture = getCulture(s.city) || "-";
+      if (editingSaleId === s.id) {
+        return "<tr data-sale-id='" + s.id + "'>" +
+          "<td><input type='text' class='sale-edit-city' list='allCitiesOptions' value=\"" + (s.city || "").replace(/"/g, "&quot;") + "\" style='width:100px;'></td>" +
+          "<td class='num'>" + region + "</td>" +
+          "<td class='num'>" + culture + "</td>" +
+          "<td><input type='number' class='sale-edit-price' value='" + s.price + "' style='width:80px;'></td>" +
+          "<td class='num'>" + b.regionBonus + "%</td>" +
+          "<td class='num'>" + b.seasonBonus + "%</td>" +
+          "<td><input type='number' class='sale-edit-market' value='" + (s.marketBonus != null ? s.marketBonus : 100) + "' style='width:55px;'></td>" +
+          "<td class='num'>-</td>" +
+          "<td><input type='text' class='sale-edit-note' value=\"" + (s.note || "").replace(/"/g, "&quot;") + "\" style='width:90px;'></td>" +
+          "<td style='white-space:nowrap;'>" +
+            "<button class='small primary sale-save-btn' data-sale-id='" + s.id + "'>저장</button> " +
+            "<button class='small sale-cancel-btn'>취소</button>" +
+          "</td>" +
+          "</tr>";
+      }
+      return "<tr class='" + (s.id === bestId ? "best-row" : "") + "' data-sale-id='" + s.id + "'>" +
+        "<td>" + s.city + "</td>" +
+        "<td>" + region + "</td>" +
+        "<td>" + culture + "</td>" +
+        "<td class='num'>" + s.price.toLocaleString() + "</td>" +
+        "<td class='num'>" + b.regionBonus + "%</td>" +
+        "<td class='num'>" + b.seasonBonus + "%</td>" +
+        "<td class='num'>" + b.marketBonus + "%</td>" +
+        "<td class='num'>" + Math.round(baseSalePrice(s, item)).toLocaleString() + "</td>" +
+        "<td>" + (s.note || "") + "</td>" +
+        "<td style='white-space:nowrap;'>" +
+          "<button class='small sale-edit-btn' data-sale-id='" + s.id + "'>수정</button> " +
+          "<button class='small danger sale-del-btn' data-sale-id='" + s.id + "'>삭제</button>" +
+        "</td>" +
+        "</tr>";
+    }).join("");
+  if (!item.sales || item.sales.length === 0) {
+    table.innerHTML += "<tr><td colspan='10' class='empty-hint'>아직 기록된 판매처가 없습니다.</td></tr>";
+  }
+  const tableWrap = document.createElement("div");
+  tableWrap.className = "sales-table-wrap";
+  tableWrap.appendChild(table);
+  body.appendChild(tableWrap);
+
+  table.querySelectorAll(".sale-del-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const saleId = Number(btn.dataset.saleId);
+      item.sales = item.sales.filter(s => s.id !== saleId);
+      hasUnsavedChanges = true;
+      renderList();
+    });
+  });
+  table.querySelectorAll(".sale-edit-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      editingSaleId = Number(btn.dataset.saleId);
+      renderList();
+    });
+  });
+  table.querySelectorAll(".sale-cancel-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      editingSaleId = null;
+      renderList();
+    });
+  });
+  table.querySelectorAll(".sale-save-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const saleId = Number(btn.dataset.saleId);
+      const tr = btn.closest("tr");
+      const city = tr.querySelector(".sale-edit-city").value.trim();
+      const price = Number(tr.querySelector(".sale-edit-price").value);
+      const marketRaw = tr.querySelector(".sale-edit-market").value;
+      const marketBonus = marketRaw !== "" ? Number(marketRaw) : 100;
+      const note = tr.querySelector(".sale-edit-note").value.trim();
+      if (!city || !price) { alert("도시와 판매가를 입력해주세요."); return; }
+      const sale = item.sales.find(s => s.id === saleId);
+      sale.city = city;
+      sale.price = price;
+      sale.marketBonus = marketBonus;
+      sale.note = note;
+      hasUnsavedChanges = true;
+      editingSaleId = null;
+      renderList();
+    });
+  });
+  table.querySelectorAll(".sale-edit-city").forEach(input => {
+    attachAutocompleteEnter(input, "allCitiesOptions", () => {
+      input.closest("tr").querySelector(".sale-save-btn").click();
+    });
+  });
+
+  const addRow = document.createElement("div");
+  addRow.className = "add-sale-grid";
+  addRow.onclick = (e) => e.stopPropagation();
+  addRow.innerHTML =
+    "<div><label>도시</label><input type='text' class='sale-city-input' list='allCitiesOptions'></div>" +
+    "<div><label>판매가</label><input type='number' class='sale-price-input'></div>" +
+    "<div><label>시세 % (비우면 100)</label><input type='number' class='sale-market-input' placeholder='100'></div>" +
+    "<div><label>비고</label><input type='text' class='sale-note-input'></div>" +
+    "<div style='display:flex; align-items:flex-end;'><button class='primary small sale-add-btn' style='width:100%;'>추가</button></div>";
+  body.appendChild(addRow);
+
+  addRow.querySelector(".sale-add-btn").addEventListener("click", () => {
+    const city = addRow.querySelector(".sale-city-input").value.trim();
+    const price = Number(addRow.querySelector(".sale-price-input").value);
+    const marketRaw = addRow.querySelector(".sale-market-input").value;
+    const marketBonus = marketRaw !== "" ? Number(marketRaw) : 100;
+    const note = addRow.querySelector(".sale-note-input").value.trim();
+    if (!city || !price) { alert("도시와 판매가를 입력해주세요."); return; }
+    if (!item.sales) item.sales = [];
+    item.sales.push({ id: nextSaleId++, city, price, marketBonus, note });
+    hasUnsavedChanges = true;
+    renderList();
+  });
+  addRow.querySelectorAll("input").forEach(input => {
+    if (input.classList.contains("sale-city-input")) return;
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); addRow.querySelector(".sale-add-btn").click(); }
+    });
+  });
+  attachAutocompleteEnter(
+    addRow.querySelector(".sale-city-input"),
+    "allCitiesOptions",
+    () => addRow.querySelector(".sale-add-btn").click()
+  );
+
+  const bulkBox = document.createElement("div");
+  bulkBox.style.cssText = "margin-top:14px; padding-top:10px; border-top:1px dashed var(--border-strong);";
+  bulkBox.onclick = (e) => e.stopPropagation();
+  bulkBox.innerHTML =
+    "<div style='font-size:12px; color:var(--text-muted); margin-bottom:6px;'>일괄 입력 (스크린샷 등에서 여러 도시 가격을 한번에 등록 — 지역/문화권/우대%는 자동 조회)</div>" +
+    "<textarea class='bulk-text-input' rows='4' style='width:100%;' placeholder='한 줄에 하나씩: 도시명,시세%,가격 (쉼표 또는 탭 구분)&#10;예) 나가사키,150,4200'></textarea>" +
+    "<div style='margin-top:6px;'><button class='primary small bulk-add-btn'>일괄 추가</button></div>";
+  body.appendChild(bulkBox);
+
+  bulkBox.querySelector(".bulk-add-btn").addEventListener("click", () => {
+    const lines = bulkBox.querySelector(".bulk-text-input").value.split("\n").map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) { alert("등록할 줄이 없습니다."); return; }
+    if (!item.sales) item.sales = [];
+    let added = 0;
+    lines.forEach(line => {
+      const parts = line.split(/\t|,/).map(s => s.trim());
+      const city = parts[0];
+      const marketBonus = (parts[1] !== undefined && parts[1] !== "") ? Number(parts[1]) : 100;
+      const price = Number(parts[2]);
+      if (!city || !price) return;
+      item.sales.push({ id: nextSaleId++, city, price, marketBonus, note: "" });
+      added++;
+    });
+    if (added === 0) { alert("형식에 맞는 줄이 없습니다. '도시명,시세%,가격' 형식을 확인해주세요."); return; }
+    bulkBox.querySelector(".bulk-text-input").value = "";
+    hasUnsavedChanges = true;
+    renderList();
+  });
+
   card.appendChild(head);
   card.appendChild(body);
   return card;
 }
 
-document.getElementById("searchInput").addEventListener("input", (e) => { searchTerm = e.target.value; renderList(); });
-document.getElementById("filterSource").addEventListener("change", (e) => { filterSource = e.target.value; renderList(); });
-document.getElementById("filterCategory").addEventListener("change", (e) => { filterCategory = e.target.value; renderList(); });
-document.getElementById("filterOrigin").addEventListener("change", (e) => { filterOrigin = e.target.value; renderList(); });
-document.getElementById("refreshBtn").addEventListener("click", async () => { await loadFromRemote(); render(); });
+// ── 교역품 등록/수정 패널 ──────────────────────────
+function closeAddItemPanel() {
+  document.getElementById("addItemPanel").style.display = "none";
+  document.getElementById("itemNameInput").value = "";
+  document.getElementById("itemCategoryInput").value = "";
+  document.getElementById("itemOriginInput").value = "";
+  document.getElementById("itemSourceInput").value = "물물교환";
+  editingItemId = null;
+  document.getElementById("addItemPanelTitle").textContent = "교역품 등록";
+  document.getElementById("doAddItem").textContent = "등록하기";
+}
+function openEditItem(item) {
+  editingItemId = item.id;
+  document.getElementById("itemNameInput").value = item.name;
+  document.getElementById("itemSourceInput").value = item.source;
+  document.getElementById("itemCategoryInput").value = item.category;
+  document.getElementById("itemOriginInput").value = item.origin;
+  document.getElementById("addItemPanelTitle").textContent = "교역품 수정";
+  document.getElementById("doAddItem").textContent = "수정하기";
+  document.getElementById("addItemPanel").style.display = "block";
+  document.getElementById("itemNameInput").focus();
+}
+document.getElementById("toggleAddItem").addEventListener("click", () => {
+  const el = document.getElementById("addItemPanel");
+  const willOpen = el.style.display !== "block";
+  if (willOpen) {
+    editingItemId = null;
+    document.getElementById("addItemPanelTitle").textContent = "교역품 등록";
+    document.getElementById("doAddItem").textContent = "등록하기";
+    el.style.display = "block";
+    document.getElementById("itemNameInput").focus();
+  } else {
+    closeAddItemPanel();
+  }
+});
+document.getElementById("cancelAddItem").addEventListener("click", () => {
+  closeAddItemPanel();
+});
+document.getElementById("doAddItem").addEventListener("click", () => {
+  const name = document.getElementById("itemNameInput").value.trim();
+  if (!name) { alert("이름을 입력해주세요."); return; }
+  const source = document.getElementById("itemSourceInput").value;
+  const category = document.getElementById("itemCategoryInput").value;
+  const origin = document.getElementById("itemOriginInput").value;
+  if (editingItemId != null) {
+    const item = items.find(i => i.id === editingItemId);
+    if (item) { item.name = name; item.source = source; item.category = category; item.origin = origin; }
+  } else {
+    items.push({ id: nextItemId++, name, source, category, origin, sales: [] });
+  }
+  hasUnsavedChanges = true;
+  closeAddItemPanel();
+  render();
+});
+document.getElementById("itemNameInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); document.getElementById("doAddItem").click(); }
+});
+
+function attachAutocompleteEnter(input, datalistId, submitFn) {
+  const datalist = document.getElementById(datalistId);
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const current = input.value.trim().toLowerCase();
+    if (!current) { submitFn(); return; }
+    const options = Array.from(datalist.options).map(o => o.value);
+    const exactMatch = options.find(o => o.toLowerCase() === current);
+    if (exactMatch) {
+      // 이미 정확히 일치 → 제출 진행
+      input.value = exactMatch;
+      submitFn();
+      return;
+    }
+    const prefixMatch = options.find(o => o.toLowerCase().startsWith(current));
+    if (prefixMatch) {
+      // 부분 입력 → 자동완성만 하고 제출은 안 함 (한 번 더 엔터 눌러야 제출)
+      input.value = prefixMatch;
+    } else {
+      // 매칭되는 옵션이 없으면 입력한 값 그대로 두고 제출 진행 (자유 입력 허용)
+      submitFn();
+    }
+  });
+}
+attachAutocompleteEnter(document.getElementById("itemCategoryInput"), "categoryOptions", () => document.getElementById("doAddItem").click());
+attachAutocompleteEnter(document.getElementById("itemOriginInput"), "originOptions", () => document.getElementById("doAddItem").click());
+
+// ── 필터 ──────────────────────────────────────────
+document.getElementById("searchInput").addEventListener("input", (e) => {
+  searchTerm = e.target.value;
+  renderList();
+});
+document.getElementById("filterSource").addEventListener("change", (e) => {
+  filterSource = e.target.value;
+  renderList();
+});
+document.getElementById("filterCategory").addEventListener("change", (e) => {
+  filterCategory = e.target.value;
+  renderList();
+});
+document.getElementById("filterOrigin").addEventListener("change", (e) => {
+  filterOrigin = e.target.value;
+  renderList();
+});
+
+// ── 저장/불러오기 ──────────────────────────────────
+document.getElementById("saveBtn").addEventListener("click", () => {
+  const data = { items, nextItemId, nextSaleId };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "trade_goods_save_" + new Date().toISOString().slice(0, 10) + ".json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  hasUnsavedChanges = false;
+});
+document.getElementById("loadBtn").addEventListener("click", () => {
+  document.getElementById("loadFile").click();
+});
+document.getElementById("loadFile").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    try {
+      const data = JSON.parse(evt.target.result);
+      items = data.items || [];
+      nextItemId = data.nextItemId || (items.length + 1);
+      nextSaleId = data.nextSaleId || 1;
+      hasUnsavedChanges = false;
+      render();
+    } catch (err) {
+      alert("파일을 읽는 중 문제가 발생했습니다. 올바른 저장 파일인지 확인해주세요.");
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+});
+document.getElementById("resetAll").addEventListener("click", () => {
+  if (!confirm("등록된 모든 교역품과 판매 기록을 초기화할까요?")) return;
+  items = [];
+  nextItemId = 1;
+  nextSaleId = 1;
+  hasUnsavedChanges = false;
+  render();
+});
+
+// ── 원격 저장 (구글시트 + Apps Script 웹앱) ──────────
+// localStorage는 "그 브라우저에서만" 남는 백업용으로 계속 두고,
+// 진짜 영구 저장은 이 구글시트 웹앱을 통해 이루어진다.
+// SECRET_KEY는 이 파일 소스에 그대로 노출되므로(공개 사이트라 view-source 가능),
+// "아무나 실수로 못 건드리게" 하는 가벼운 잠금 정도로만 취급할 것.
+const REMOTE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzhRgZGT3nkrpNs6JqiOpUiMKTkcEEV29QMuDMuLZJwgdW1Ao_KeQR3t8yqRYmVp0yUFw/exec";
+const REMOTE_WRITE_KEY = "drummer4";
+let remoteSyncTimer = null;
+let remoteStatus = "idle"; // idle | syncing | ok | error
+
+function setRemoteStatusUI(status) {
+  remoteStatus = status;
+  const el = document.getElementById("remoteStatus");
+  if (!el) return;
+  const map = {
+    idle: ["", ""],
+    loading: ["불러오는 중...", "var(--text-muted)"],
+    syncing: ["저장 중...", "var(--text-muted)"],
+    ok: ["저장됨 ✓", "#3d8b52"],
+    error: ["원격 저장 실패 (로컬에만 저장됨)", "#b3402f"],
+  };
+  const [text, color] = map[status] || ["", ""];
+  el.textContent = text;
+  el.style.color = color;
+}
+
+async function loadFromRemote() {
+  setRemoteStatusUI("loading");
+  try {
+    const url = REMOTE_WEBAPP_URL + "?key=" + encodeURIComponent(REMOTE_WRITE_KEY);
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!json.ok) { setRemoteStatusUI("error"); return false; }
+    const data = json.data || {};
+    items = data.items || [];
+    nextItemId = data.nextItemId || (items.length + 1);
+    nextSaleId = data.nextSaleId || 1;
+    setRemoteStatusUI("ok");
+    return true;
+  } catch (e) {
+    setRemoteStatusUI("error");
+    return false;
+  }
+}
+
+async function saveToRemoteNow() {
+  setRemoteStatusUI("syncing");
+  try {
+    const res = await fetch(REMOTE_WEBAPP_URL, {
+      method: "POST",
+      // text/plain으로 보내야 브라우저가 CORS 프리플라이트(OPTIONS)를 안 보내고,
+      // Apps Script 쪽에서는 e.postData.contents를 그냥 JSON으로 파싱한다.
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ key: REMOTE_WRITE_KEY, data: { items, nextItemId, nextSaleId } }),
+    });
+    const json = await res.json();
+    setRemoteStatusUI(json.ok ? "ok" : "error");
+  } catch (e) {
+    setRemoteStatusUI("error");
+  }
+}
+
+// 입력할 때마다 매번 쏘지 않고, 마지막 변경 후 1.2초 뒤에 한 번만 저장 (디바운스)
+function scheduleRemoteSave() {
+  if (remoteSyncTimer) clearTimeout(remoteSyncTimer);
+  remoteSyncTimer = setTimeout(saveToRemoteNow, 1200);
+}
+
+// ── 자동 저장 (localStorage, 원격 실패 시 대비용 백업) ──
+// 주의: 이건 Claude.ai 아티팩트 안에서는 지원되지 않는 기능이라 이 파일을
+// 독립된 웹사이트로 올려서 쓸 때만 정상 동작한다. 실패해도 앱이 죽지 않도록
+// try/catch로 감싸고, 실패하면 그냥 조용히 자동 저장 없이 넘어간다.
+const LOCAL_STORAGE_KEY = "uwo_trade_goods_tracker_v1";
+function loadFromLocalStorage() {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    items = data.items || [];
+    nextItemId = data.nextItemId || (items.length + 1);
+    nextSaleId = data.nextSaleId || 1;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+function saveToLocalStorage() {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ items, nextItemId, nextSaleId }));
+  } catch (e) {
+    // 저장소 접근 불가(예: Claude 아티팩트 샌드박스, 프라이빗 브라우징 등) — 조용히 무시
+  }
+}
+
+// ── 저장 안 한 상태로 페이지를 나가려 하면 경고 ──────
+window.addEventListener("beforeunload", (e) => {
+  if (hasUnsavedChanges && items.length > 0) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
 
 (async function init() {
-  await loadFromRemote();
+  const remoteOk = await loadFromRemote();
+  if (!remoteOk) loadFromLocalStorage(); // 원격 실패 시에만 로컬 백업으로 대체
   render();
 })();
 </script>
