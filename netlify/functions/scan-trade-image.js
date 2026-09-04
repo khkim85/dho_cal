@@ -6,7 +6,7 @@
 //
 // GEMINI_API_KEY는 Netlify 대시보드의 환경변수로만 등록하고, 코드에는 절대 넣지 않는다.
 
-const MODEL = "gemini-2.0-flash";
+const MODEL = "gemini-3.1-flash-lite";
 
 const PROMPT = `다음은 "대항해시대 오리진(Uncharted Waters Origin)" 게임의 교역품 도시별 판매가 목록 스크린샷이다.
 이미지에서 정보를 추출해서 아래 JSON 형식으로만 답하라 (다른 설명, 코드블록 표시 없이 JSON 텍스트만):
@@ -71,9 +71,14 @@ exports.handler = async function (event) {
       json.candidates[0].content.parts[0].text;
 
     if (!text) {
+      const apiError = json.error ? (json.error.message || JSON.stringify(json.error)) : null;
       return {
         statusCode: 502,
-        body: JSON.stringify({ ok: false, error: "AI 응답을 이해하지 못했습니다.", raw: json }),
+        body: JSON.stringify({
+          ok: false,
+          error: apiError ? "Gemini API 오류: " + apiError : "AI 응답을 이해하지 못했습니다.",
+          raw: json,
+        }),
       };
     }
 
