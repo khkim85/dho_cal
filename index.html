@@ -108,6 +108,7 @@
   <button id="loadBtn">불러오기</button>
   <input type="file" id="loadFile" accept="application/json" style="display:none;">
   <button id="resetAll">전체 초기화</button>
+  <span id="remoteStatus" style="font-size:12px;"></span>
 </div>
 
 <div class="panel" id="addItemPanel" style="display:none;">
@@ -279,6 +280,7 @@ function renderCategoryFilterOptions() {
 
 function renderList() {
   saveToLocalStorage();
+  scheduleRemoteSave();
   const container = document.getElementById("itemList");
   container.innerHTML = "";
 
@@ -755,7 +757,75 @@ document.getElementById("resetAll").addEventListener("click", () => {
   render();
 });
 
-// ── 자동 저장 (localStorage) ──────────────────────
+// ── 원격 저장 (구글시트 + Apps Script 웹앱) ──────────
+// localStorage는 "그 브라우저에서만" 남는 백업용으로 계속 두고,
+// 진짜 영구 저장은 이 구글시트 웹앱을 통해 이루어진다.
+// SECRET_KEY는 이 파일 소스에 그대로 노출되므로(공개 사이트라 view-source 가능),
+// "아무나 실수로 못 건드리게" 하는 가벼운 잠금 정도로만 취급할 것.
+const REMOTE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwXC2i8pNGJj1eEwCmUNWfxZ_JddCU_D51e-PRCOEgMs9QTlvbsHkQAAlHNwK3XbUBuug/exec";
+const REMOTE_SECRET_KEY = "drummer4";
+let remoteSyncTimer = null;
+let remoteStatus = "idle"; // idle | syncing | ok | error
+
+function setRemoteStatusUI(status) {
+  remoteStatus = status;
+  const el = document.getElementById("remoteStatus");
+  if (!el) return;
+  const map = {
+    idle: ["", ""],
+    loading: ["불러오는 중...", "var(--text-muted)"],
+    syncing: ["저장 중...", "var(--text-muted)"],
+    ok: ["저장됨 ✓", "#3d8b52"],
+    error: ["원격 저장 실패 (로컬에만 저장됨)", "#b3402f"],
+  };
+  const [text, color] = map[status] || ["", ""];
+  el.textContent = text;
+  el.style.color = color;
+}
+
+async function loadFromRemote() {
+  setRemoteStatusUI("loading");
+  try {
+    const url = REMOTE_WEBAPP_URL + "?key=" + encodeURIComponent(REMOTE_SECRET_KEY);
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!json.ok) { setRemoteStatusUI("error"); return false; }
+    const data = json.data || {};
+    items = data.items || [];
+    nextItemId = data.nextItemId || (items.length + 1);
+    nextSaleId = data.nextSaleId || 1;
+    setRemoteStatusUI("ok");
+    return true;
+  } catch (e) {
+    setRemoteStatusUI("error");
+    return false;
+  }
+}
+
+async function saveToRemoteNow() {
+  setRemoteStatusUI("syncing");
+  try {
+    const res = await fetch(REMOTE_WEBAPP_URL, {
+      method: "POST",
+      // text/plain으로 보내야 브라우저가 CORS 프리플라이트(OPTIONS)를 안 보내고,
+      // Apps Script 쪽에서는 e.postData.contents를 그냥 JSON으로 파싱한다.
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ key: REMOTE_SECRET_KEY, data: { items, nextItemId, nextSaleId } }),
+    });
+    const json = await res.json();
+    setRemoteStatusUI(json.ok ? "ok" : "error");
+  } catch (e) {
+    setRemoteStatusUI("error");
+  }
+}
+
+// 입력할 때마다 매번 쏘지 않고, 마지막 변경 후 1.2초 뒤에 한 번만 저장 (디바운스)
+function scheduleRemoteSave() {
+  if (remoteSyncTimer) clearTimeout(remoteSyncTimer);
+  remoteSyncTimer = setTimeout(saveToRemoteNow, 1200);
+}
+
+// ── 자동 저장 (localStorage, 원격 실패 시 대비용 백업) ──
 // 주의: 이건 Claude.ai 아티팩트 안에서는 지원되지 않는 기능이라 이 파일을
 // 독립된 웹사이트로 올려서 쓸 때만 정상 동작한다. 실패해도 앱이 죽지 않도록
 // try/catch로 감싸고, 실패하면 그냥 조용히 자동 저장 없이 넘어간다.
@@ -789,8 +859,11 @@ window.addEventListener("beforeunload", (e) => {
   }
 });
 
-loadFromLocalStorage();
-render();
+(async function init() {
+  const remoteOk = await loadFromRemote();
+  if (!remoteOk) loadFromLocalStorage(); // 원격 실패 시에만 로컬 백업으로 대체
+  render();
+})();
 </script>
 </body>
 </html>
