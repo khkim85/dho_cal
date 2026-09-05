@@ -185,7 +185,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-09</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-10</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -232,7 +232,10 @@
     </div>
     <div>
       <label>분류</label>
-      <input type="text" id="itemCategoryInput" list="categoryOptions" placeholder="입력하면 자동완성">
+      <div style="display:flex; gap:4px;">
+        <input type="text" id="itemCategoryInput" list="categoryOptions" placeholder="입력하면 자동완성" style="flex:1;">
+        <button type="button" class="small" id="itemCategoryDropdownBtn" title="전체 목록 보기" style="padding:0 8px;">▼</button>
+      </div>
       <datalist id="categoryOptions">
         <option value="식료품"></option>
         <option value="조미료"></option>
@@ -259,7 +262,10 @@
     </div>
     <div>
       <label>획득처</label>
-      <input type="text" id="itemOriginInput" list="originOptions" placeholder="입력하면 자동완성">
+      <div style="display:flex; gap:4px;">
+        <input type="text" id="itemOriginInput" list="originOptions" placeholder="입력하면 자동완성" style="flex:1;">
+        <button type="button" class="small" id="itemOriginDropdownBtn" title="전체 목록 보기" style="padding:0 8px;">▼</button>
+      </div>
       <datalist id="originOptions">
         <option value="북극"></option>
         <option value="북해"></option>
@@ -1615,6 +1621,16 @@ function attachAutocompleteEnter(input, datalistId, submitFn) {
     }
   });
 }
+function showFullDatalist(inputId) {
+  const input = document.getElementById(inputId);
+  input.value = "";
+  input.focus();
+  // 일부 브라우저는 값이 바뀐 직후 다시 포커스를 줘야 전체 목록을 띄운다
+  setTimeout(() => { input.blur(); input.focus(); }, 0);
+}
+document.getElementById("itemCategoryDropdownBtn").addEventListener("click", () => showFullDatalist("itemCategoryInput"));
+document.getElementById("itemOriginDropdownBtn").addEventListener("click", () => showFullDatalist("itemOriginInput"));
+
 attachAutocompleteEnter(document.getElementById("itemCategoryInput"), "categoryOptions", () => document.getElementById("doAddItem").click());
 attachAutocompleteEnter(document.getElementById("itemOriginInput"), "originOptions", () => document.getElementById("doAddItem").click());
 
