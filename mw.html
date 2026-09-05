@@ -159,7 +159,8 @@
   .craft-tier-table th { color: var(--text-muted); font-weight: 700; font-size: 11px; }
   .craft-tier-table th:nth-child(1), .craft-tier-table td:nth-child(1) { width: 60px; }
   .craft-tier-table th:nth-child(2), .craft-tier-table td:nth-child(2) { width: 130px; }
-  .craft-city-list { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .craft-city-list { display: flex; flex-direction: column; gap: 6px; }
+  .craft-city-row-line { display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 4px 14px; }
   .craft-city-chip { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
 </style>
 </head>
@@ -644,9 +645,14 @@ function renderCraftMaterials() {
   table.innerHTML = "<tr><th>티어</th><th>재료</th><th>도시</th></tr>" +
     groups.map(g => {
       const entries = craftMaterials.filter(e => e.materialName === g.name);
-      const cities = entries.map(e =>
+      const chipsHtml = entries.map(e =>
         "<label class='craft-city-chip'><input type='checkbox' class='craft-check' data-id='" + e.id + "'" + (e.checked ? ' checked' : '') + "> " + e.city + "</label>"
-      ).join('');
+      );
+      // 폭과 상관없이 5개마다 강제 줄바꿈
+      let cities = '';
+      for (let i = 0; i < chipsHtml.length; i += 5) {
+        cities += "<div class='craft-city-row-line'>" + chipsHtml.slice(i, i + 5).join('') + "</div>";
+      }
       const tierLabel = g.label ? g.label : (g.num != null ? g.num : "26+");
       return "<tr><td>" + tierLabel + "</td><td>" + g.name + "</td><td><div class='craft-city-list'>" + cities + "</div></td></tr>";
     }).join('');
