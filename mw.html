@@ -175,6 +175,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-01</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -331,15 +332,21 @@
   <h2 style="font-size:15px; margin:20px 0 10px;">내 체크리스트</h2>
   <div id="checklistContainer"></div>
 
-  <h2 style="font-size:15px; margin:20px 0 10px;">강화 재료</h2>
-  <div class="toolbar">
-    <button id="craftViewRegionBtn">지역별 보기 (참고용)</button>
-    <button class="small danger" id="craftResetBtn">전체 초기화</button>
-  </div>
-  <div id="craftMaterialContainer"></div>
+  <div class="checklist-grid" style="margin-top:20px;">
+    <div class="checklist-grid-item">
+      <h2 style="font-size:15px; margin:0 0 10px;">강화 재료</h2>
+      <div class="toolbar">
+        <button id="craftViewRegionBtn">지역별 보기 (참고용)</button>
+        <button class="small danger" id="craftResetBtn">전체 초기화</button>
+      </div>
+      <div id="craftMaterialContainer"></div>
+    </div>
 
-  <h2 style="font-size:15px; margin:20px 0 10px;">수집품 체크리스트</h2>
-  <div id="collectionContainer"></div>
+    <div class="checklist-grid-item">
+      <h2 style="font-size:15px; margin:0 0 10px;">수집품 체크리스트</h2>
+      <div id="collectionContainer"></div>
+    </div>
+  </div>
 </div>
 <div id="craftRegionModalRoot"></div>
 
