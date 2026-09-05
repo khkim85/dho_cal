@@ -149,9 +149,7 @@
   .craft-tier-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
   .craft-tier-table th, .craft-tier-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 13px; }
   .craft-tier-table th { color: var(--text-muted); font-weight: 700; font-size: 11px; }
-  .craft-city-chip { display: inline-block; margin-right: 8px; }
-  .craft-city-chip.done { color: #7ec996; text-decoration: line-through; }
-  .craft-city-chip.pending { color: var(--text); }
+  .craft-city-chip { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -314,8 +312,8 @@
 
   <h2 style="font-size:15px; margin:28px 0 10px; padding-top:16px; border-top:1px solid var(--border);">강화 재료</h2>
   <div class="toolbar">
-    <button class="primary" id="craftViewRegionBtn">지역별 (체크 가능)</button>
-    <button id="craftViewTierBtn">티어별 (참고용)</button>
+    <button id="craftViewRegionBtn">지역별 (참고용)</button>
+    <button class="primary" id="craftViewTierBtn">티어별 (체크 가능)</button>
   </div>
   <div id="craftMaterialContainer"></div>
 </div>
@@ -619,6 +617,7 @@ function renderCraftMaterials() {
   container.innerHTML = '';
 
   if (craftView === 'region') {
+    // 지역별 참고용 (클릭 불가 — 체크 상태만 반영)
     REGION_ORDER.forEach(region => {
       const entries = craftMaterials.filter(e => e.region === region);
       if (entries.length === 0) return;
@@ -629,12 +628,26 @@ function renderCraftMaterials() {
         const row = document.createElement('div');
         row.className = 'craft-city-row';
         row.innerHTML =
-          "<input type='checkbox' class='craft-check' data-id='" + e.id + "'" + (e.checked ? ' checked' : '') + ">" +
           "<span class='craft-city-text" + (e.checked ? ' checked' : '') + "'>" + e.city + " (" + e.materialName + ")</span>";
         box.appendChild(row);
       });
       container.appendChild(box);
     });
+  } else {
+    // 티어별 (내림차순, 체크 가능)
+    const nums = Array.from(new Set(craftMaterials.map(e => e.materialNum))).sort((a, b) => b - a);
+    const table = document.createElement('table');
+    table.className = 'craft-tier-table';
+    table.innerHTML = "<tr><th>번호</th><th>재료</th><th>도시</th></tr>" +
+      nums.map(num => {
+        const entries = craftMaterials.filter(e => e.materialNum === num);
+        const cities = entries.map(e =>
+          "<label class='craft-city-chip'><input type='checkbox' class='craft-check' data-id='" + e.id + "'" + (e.checked ? ' checked' : '') + "> " + e.city + "</label>"
+        ).join('');
+        return "<tr><td>" + num + "</td><td>" + entries[0].materialName + "</td><td>" + cities + "</td></tr>";
+      }).join('');
+    container.appendChild(table);
+
     container.querySelectorAll('.craft-check').forEach(cb => {
       cb.addEventListener('change', () => {
         const entry = craftMaterials.find(e => e.id === Number(cb.dataset.id));
@@ -646,20 +659,6 @@ function renderCraftMaterials() {
         renderCraftMaterials();
       });
     });
-  } else {
-    // 티어별 참고용 (내림차순, 클릭 불가 — 체크 상태만 반영)
-    const nums = Array.from(new Set(craftMaterials.map(e => e.materialNum))).sort((a, b) => b - a);
-    const table = document.createElement('table');
-    table.className = 'craft-tier-table';
-    table.innerHTML = "<tr><th>번호</th><th>재료</th><th>도시 (완료된 곳은 취소선)</th></tr>" +
-      nums.map(num => {
-        const entries = craftMaterials.filter(e => e.materialNum === num);
-        const cities = entries.map(e =>
-          "<span class='craft-city-chip " + (e.checked ? 'done' : 'pending') + "'>" + e.city + "</span>"
-        ).join('');
-        return "<tr><td>" + num + "</td><td>" + entries[0].materialName + "</td><td>" + cities + "</td></tr>";
-      }).join('');
-    container.appendChild(table);
   }
 }
 
@@ -873,7 +872,7 @@ let nextChecklistItemId = 1;
 
 let craftMaterials = []; // {id, region, city, materialNum, materialName, checked}
 let nextCraftMaterialId = 1;
-let craftView = 'region'; // 'region' | 'tier'
+let craftView = 'tier'; // 'region' | 'tier'
 let nextBoostId = 1;
 let boostScanPreviewRows = []; // AI 스캔 직후 확인 대기 중인 행들
 
