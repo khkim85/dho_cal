@@ -126,6 +126,20 @@
   .boost-item-chip { font-size: 12px; background: #23392a; color: #7ec996; border-radius: 5px; padding: 3px 9px; white-space: nowrap; font-weight: 600; }
   .boost-preview-row { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border-bottom: 1px solid var(--border); font-size: 13px; }
   .boost-preview-row input[type="checkbox"] { margin-top: 3px; }
+
+  .checklist-category { border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 12px 14px; margin-bottom: 14px; }
+  .checklist-category-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .checklist-category-name { font-weight: 700; font-size: 15px; }
+  .checklist-type-badge { font-size: 11px; border-radius: 4px; padding: 2px 8px; font-weight: 700; }
+  .checklist-type-badge.permanent { background: #2d3138; color: var(--text-muted); }
+  .checklist-type-badge.daily { background: #22392a; color: #7ec996; }
+  .checklist-type-badge.weekly { background: #22283f; color: #8ab4f8; }
+  .checklist-item-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+  .checklist-item-row input[type="checkbox"] { width: 16px; height: 16px; flex-shrink: 0; }
+  .checklist-item-text { flex: 1; font-size: 13px; }
+  .checklist-item-text.checked { text-decoration: line-through; color: var(--text-muted); }
+  .checklist-add-item-row { display: flex; gap: 8px; margin-top: 8px; }
+  .checklist-add-item-row input { flex: 1; }
 </style>
 </head>
 <body>
@@ -136,6 +150,7 @@
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
   <button class="main-tab-btn" id="tabBtnSchedule">일정</button>
+  <button class="main-tab-btn" id="tabBtnChecklist">체크리스트</button>
 </div>
 
 <div id="tabPanelPrice">
@@ -272,6 +287,20 @@
   <div id="hypeList"></div>
 </div>
 
+<div id="tabPanelChecklist" style="display:none;">
+  <p class="hint">영구 지속 / 일일 갱신(매일 자정) / 주간 갱신(매주 월요일 자정) 카테고리를 만들고, 항목을 자유롭게 추가할 수 있습니다.</p>
+  <div class="toolbar">
+    <input type="text" id="newCategoryNameInput" placeholder="새 카테고리 이름" style="flex:1; min-width:160px;">
+    <select id="newCategoryTypeInput">
+      <option value="permanent">영구 지속</option>
+      <option value="daily">일일 갱신</option>
+      <option value="weekly">주간 갱신</option>
+    </select>
+    <button class="primary" id="addCategoryBtn">카테고리 추가</button>
+  </div>
+  <div id="checklistContainer"></div>
+</div>
+
 <script>
 const HYPE_DATA = {"periods": {"축제": 179, "전염병": 199, "홍수": 223, "전쟁": 241, "후원": 269, "개발": 311, "호황": 337, "사치": 379}, "anchors": {"북해": {"호황": "2026-09-05T10:00:00", "축제": "2026-09-08T06:00:00", "전쟁": "2026-09-09T01:00:00", "홍수": "2026-09-09T06:00:00", "후원": "2026-09-10T19:00:00", "전염병": "2026-09-11T12:00:00", "개발": "2026-09-16T23:00:00", "사치": "2026-09-17T06:00:00"}, "동지중해": {"후원": "2026-09-05T02:00:00", "전쟁": "2026-09-05T16:00:00", "홍수": "2026-09-07T09:00:00", "개발": "2026-09-07T18:00:00", "호황": "2026-09-08T02:00:00", "축제": "2026-09-10T01:00:00", "전염병": "2026-09-11T15:00:00", "사치": "2026-09-18T04:00:00"}, "서지중해 및 대서양": {"홍수": "2026-09-05T12:00:00", "후원": "2026-09-10T14:00:00", "호황": "2026-09-10T18:00:00", "개발": "2026-09-11T12:00:00", "전염병": "2026-09-11T18:00:00", "축제": "2026-09-11T20:00:00", "전쟁": "2026-09-12T08:00:00", "사치": "2026-09-19T02:00:00"}, "아프리카 서부": {"축제": "2026-09-06T04:00:00", "후원": "2026-09-04T21:00:00", "전쟁": "2026-09-08T23:00:00", "전염병": "2026-09-11T21:00:00", "홍수": "2026-09-12T22:00:00", "호황": "2026-09-13T10:00:00", "개발": "2026-09-15T06:00:00", "사치": "2026-09-20T00:00:00"}, "아프리카 남부": {"사치": "2026-09-05T03:00:00", "전쟁": "2026-09-05T14:00:00", "개발": "2026-09-06T01:00:00", "축제": "2026-09-07T23:00:00", "후원": "2026-09-10T09:00:00", "홍수": "2026-09-11T01:00:00", "전염병": "2026-09-12T00:00:00", "호황": "2026-09-16T02:00:00"}, "아프리카 동부": {"사치": "2026-09-06T01:00:00", "호황": "2026-09-04T17:00:00", "홍수": "2026-09-09T04:00:00", "축제": "2026-09-09T18:00:00", "개발": "2026-09-09T19:00:00", "전염병": "2026-09-12T03:00:00", "전쟁": "2026-09-12T06:00:00", "후원": "2026-09-15T21:00:00"}, "아라비아 및 서인도": {"사치": "2026-09-06T23:00:00", "홍수": "2026-09-07T07:00:00", "호황": "2026-09-07T09:00:00", "전쟁": "2026-09-08T21:00:00", "후원": "2026-09-10T04:00:00", "축제": "2026-09-11T13:00:00", "전염병": "2026-09-12T06:00:00", "개발": "2026-09-13T13:00:00"}, "동인도 및 인도차이나": {"홍수": "2026-09-05T10:00:00", "전쟁": "2026-09-05T12:00:00", "축제": "2026-09-05T21:00:00", "사치": "2026-09-07T21:00:00", "호황": "2026-09-10T01:00:00", "전염병": "2026-09-12T09:00:00", "후원": "2026-09-15T16:00:00", "개발": "2026-09-17T07:00:00"}, "남아시아": {"축제": "2026-09-07T16:00:00", "개발": "2026-09-08T02:00:00", "사치": "2026-09-08T19:00:00", "후원": "2026-09-09T23:00:00", "전쟁": "2026-09-12T04:00:00", "전염병": "2026-09-12T12:00:00", "호황": "2026-09-12T17:00:00", "홍수": "2026-09-12T20:00:00"}, "극동아시아": {"전쟁": "2026-09-05T10:00:00", "홍수": "2026-09-09T02:00:00", "후원": "2026-09-09T18:00:00", "사치": "2026-09-10T15:00:00", "축제": "2026-09-11T06:00:00", "전염병": "2026-09-12T18:00:00", "개발": "2026-09-15T14:00:00", "호황": "2026-09-18T01:00:00"}, "오세아니아": {"축제": "2026-09-05T14:00:00", "개발": "2026-09-06T09:00:00", "호황": "2026-09-06T16:00:00", "홍수": "2026-09-07T05:00:00", "사치": "2026-09-11T13:00:00", "전쟁": "2026-09-12T02:00:00", "전염병": "2026-09-12T21:00:00", "후원": "2026-09-15T06:00:00"}, "오세아니아 동부": {"홍수": "2026-09-05T08:00:00", "축제": "2026-09-07T09:00:00", "전염병": "2026-09-04T17:00:00", "전쟁": "2026-09-08T17:00:00", "호황": "2026-09-09T08:00:00", "후원": "2026-09-09T13:00:00", "개발": "2026-09-10T03:00:00", "사치": "2026-09-12T11:00:00"}, "북극해": {"전쟁": "2026-09-05T08:00:00", "전염병": "2026-09-04T20:00:00", "축제": "2026-09-09T04:00:00", "호황": "2026-09-12T00:00:00", "홍수": "2026-09-12T18:00:00", "사치": "2026-09-13T09:00:00", "개발": "2026-09-13T21:00:00", "후원": "2026-09-15T01:00:00"}, "아메리카 동부": {"전염병": "2026-09-05T02:00:00", "축제": "2026-09-05T07:00:00", "개발": "2026-09-08T10:00:00", "전쟁": "2026-09-08T15:00:00", "홍수": "2026-09-09T00:00:00", "후원": "2026-09-14T20:00:00", "사치": "2026-09-15T05:00:00", "호황": "2026-09-17T08:00:00"}, "북아메리카 서부": {"전염병": "2026-09-05T05:00:00", "전쟁": "2026-09-05T06:00:00", "호황": "2026-09-05T23:00:00", "축제": "2026-09-07T02:00:00", "홍수": "2026-09-07T03:00:00", "후원": "2026-09-09T03:00:00", "개발": "2026-09-12T04:00:00", "사치": "2026-09-16T03:00:00"}, "태평양": {"홍수": "2026-09-05T06:00:00", "전염병": "2026-09-05T08:00:00", "호황": "2026-09-08T15:00:00", "축제": "2026-09-08T21:00:00", "전쟁": "2026-09-11T22:00:00", "후원": "2026-09-14T15:00:00", "개발": "2026-09-15T22:00:00", "사치": "2026-09-17T01:00:00"}, "남아메리카": {"전염병": "2026-09-04T23:00:00", "개발": "2026-09-04T16:00:00", "후원": "2026-09-09T08:00:00", "홍수": "2026-09-10T21:00:00", "축제": "2026-09-10T23:00:00", "전쟁": "2026-09-12T00:00:00", "사치": "2026-09-14T07:00:00", "호황": "2026-09-14T16:00:00"}, "동아시아": {"전쟁": "2026-09-08T19:00:00", "축제": "2026-09-09T11:00:00", "사치": "2026-09-09T17:00:00", "홍수": "2026-09-10T23:00:00", "개발": "2026-09-11T20:00:00", "전염병": "2026-09-12T15:00:00", "호황": "2026-09-15T09:00:00", "후원": "2026-09-15T11:00:00"}}};
 const KIND_CATEGORIES = {
@@ -383,22 +412,179 @@ function renderHypeTab() {
   });
 }
 
-document.getElementById('tabBtnPrice').addEventListener('click', () => {
-  document.getElementById('tabBtnPrice').classList.add('active');
-  document.getElementById('tabBtnSchedule').classList.remove('active');
-  document.getElementById('tabPanelPrice').style.display = '';
-  document.getElementById('tabPanelSchedule').style.display = 'none';
-});
+function switchMainTab(activeId) {
+  ['tabBtnPrice', 'tabBtnSchedule', 'tabBtnChecklist'].forEach(id => {
+    document.getElementById(id).classList.toggle('active', id === activeId);
+  });
+  document.getElementById('tabPanelPrice').style.display = activeId === 'tabBtnPrice' ? '' : 'none';
+  document.getElementById('tabPanelSchedule').style.display = activeId === 'tabBtnSchedule' ? '' : 'none';
+  document.getElementById('tabPanelChecklist').style.display = activeId === 'tabBtnChecklist' ? '' : 'none';
+}
+document.getElementById('tabBtnPrice').addEventListener('click', () => switchMainTab('tabBtnPrice'));
 document.getElementById('tabBtnSchedule').addEventListener('click', () => {
-  document.getElementById('tabBtnSchedule').classList.add('active');
-  document.getElementById('tabBtnPrice').classList.remove('active');
-  document.getElementById('tabPanelPrice').style.display = 'none';
-  document.getElementById('tabPanelSchedule').style.display = '';
+  switchMainTab('tabBtnSchedule');
   renderHypeTab();
+});
+document.getElementById('tabBtnChecklist').addEventListener('click', () => {
+  switchMainTab('tabBtnChecklist');
+  renderChecklistTab();
 });
 setInterval(() => {
   if (document.getElementById('tabPanelSchedule').style.display !== 'none') renderHypeTab();
 }, 60000);
+
+// ── 체크리스트 ─────────────────────────────────────
+// 일일: 날짜 문자열(KST 기준), 주간: 그 주의 월요일 날짜 문자열을 "기간 키"로 사용
+function todayPeriodKey() {
+  const now = new Date();
+  return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+}
+function weekPeriodKey() {
+  const now = new Date();
+  const day = now.getDay(); // 0=일 ... 1=월
+  const diffToMonday = (day === 0) ? -6 : (1 - day);
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMonday);
+  return monday.getFullYear() + '-' + String(monday.getMonth()+1).padStart(2,'0') + '-' + String(monday.getDate()).padStart(2,'0');
+}
+function currentPeriodKeyFor(type) {
+  if (type === 'daily') return todayPeriodKey();
+  if (type === 'weekly') return weekPeriodKey();
+  return null; // permanent은 리셋 없음
+}
+
+// 갱신 시점이 지난 카테고리는 체크를 자동으로 풀어준다
+function resetDueChecklists() {
+  let changed = false;
+  checklistCategories.forEach(cat => {
+    if (cat.type === 'permanent') return;
+    const key = currentPeriodKeyFor(cat.type);
+    if (cat.lastResetPeriod !== key) {
+      cat.items.forEach(it => { it.checked = false; });
+      cat.lastResetPeriod = key;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+function renderChecklistTab() {
+  if (resetDueChecklists()) {
+    hasUnsavedChanges = true;
+    saveToLocalStorage();
+    scheduleRemoteSave();
+  }
+  const container = document.getElementById('checklistContainer');
+  container.innerHTML = '';
+  if (checklistCategories.length === 0) {
+    container.innerHTML = "<div class='empty-hint'>위에서 카테고리를 추가해보세요.</div>";
+    return;
+  }
+  const typeLabel = { permanent: '영구 지속', daily: '일일 갱신', weekly: '주간 갱신' };
+
+  checklistCategories.forEach(cat => {
+    const box = document.createElement('div');
+    box.className = 'checklist-category';
+
+    const head = document.createElement('div');
+    head.className = 'checklist-category-head';
+    head.innerHTML =
+      "<span class='checklist-category-name'>" + cat.name + "</span>" +
+      "<span class='checklist-type-badge " + cat.type + "'>" + typeLabel[cat.type] + "</span>" +
+      "<button class='small danger checklist-del-cat-btn' data-cat-id='" + cat.id + "' style='margin-left:auto;'>카테고리 삭제</button>";
+    box.appendChild(head);
+
+    (cat.items || []).forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'checklist-item-row';
+      row.innerHTML =
+        "<input type='checkbox' class='checklist-item-check' data-cat-id='" + cat.id + "' data-item-id='" + item.id + "'" + (item.checked ? ' checked' : '') + ">" +
+        "<span class='checklist-item-text" + (item.checked ? ' checked' : '') + "'>" + item.text + "</span>" +
+        "<button class='small danger checklist-del-item-btn' data-cat-id='" + cat.id + "' data-item-id='" + item.id + "'>삭제</button>";
+      box.appendChild(row);
+    });
+
+    const addRow = document.createElement('div');
+    addRow.className = 'checklist-add-item-row';
+    addRow.innerHTML =
+      "<input type='text' class='checklist-new-item-input' placeholder='새 항목 (Enter로 추가)'>" +
+      "<button class='small primary checklist-add-item-btn' data-cat-id='" + cat.id + "'>추가</button>";
+    box.appendChild(addRow);
+
+    container.appendChild(box);
+  });
+
+  container.querySelectorAll('.checklist-item-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const cat = checklistCategories.find(c => c.id === Number(cb.dataset.catId));
+      const item = cat && cat.items.find(i => i.id === Number(cb.dataset.itemId));
+      if (!item) return;
+      item.checked = cb.checked;
+      hasUnsavedChanges = true;
+      saveToLocalStorage();
+      scheduleRemoteSave();
+      renderChecklistTab();
+    });
+  });
+  container.querySelectorAll('.checklist-del-item-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cat = checklistCategories.find(c => c.id === Number(btn.dataset.catId));
+      if (!cat) return;
+      cat.items = cat.items.filter(i => i.id !== Number(btn.dataset.itemId));
+      hasUnsavedChanges = true;
+      saveToLocalStorage();
+      scheduleRemoteSave();
+      renderChecklistTab();
+    });
+  });
+  container.querySelectorAll('.checklist-del-cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('이 카테고리와 안의 모든 항목을 삭제할까요?')) return;
+      const id = Number(btn.dataset.catId);
+      checklistCategories = checklistCategories.filter(c => c.id !== id);
+      hasUnsavedChanges = true;
+      saveToLocalStorage();
+      scheduleRemoteSave();
+      renderChecklistTab();
+    });
+  });
+  container.querySelectorAll('.checklist-add-item-btn').forEach(btn => {
+    const doAdd = () => {
+      const catId = Number(btn.dataset.catId);
+      const cat = checklistCategories.find(c => c.id === catId);
+      if (!cat) return;
+      const input = btn.parentElement.querySelector('.checklist-new-item-input');
+      const text = input.value.trim();
+      if (!text) return;
+      cat.items.push({ id: nextChecklistItemId++, text, checked: false });
+      hasUnsavedChanges = true;
+      saveToLocalStorage();
+      scheduleRemoteSave();
+      renderChecklistTab();
+    };
+    btn.addEventListener('click', doAdd);
+    btn.parentElement.querySelector('.checklist-new-item-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); doAdd(); }
+    });
+  });
+}
+
+document.getElementById('addCategoryBtn').addEventListener('click', () => {
+  const nameInput = document.getElementById('newCategoryNameInput');
+  const name = nameInput.value.trim();
+  if (!name) { alert('카테고리 이름을 입력해주세요.'); return; }
+  const type = document.getElementById('newCategoryTypeInput').value;
+  const key = currentPeriodKeyFor(type);
+  checklistCategories.push({ id: nextCategoryId++, name, type, lastResetPeriod: key, items: [] });
+  nameInput.value = '';
+  hasUnsavedChanges = true;
+  saveToLocalStorage();
+  scheduleRemoteSave();
+  renderChecklistTab();
+});
+document.getElementById('newCategoryNameInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('addCategoryBtn').click(); }
+});
 
 function updateLiveClock() {
   const now = new Date();
@@ -590,6 +776,10 @@ let editingSaleId = null;
 let editingItemId = null;
 
 let boosts = []; // {id, time(ISO), region, kind, items:[{name, priceRange}]}
+
+let checklistCategories = []; // {id, name, type: 'permanent'|'daily'|'weekly', lastResetPeriod, items:[{id, text, checked}]}
+let nextCategoryId = 1;
+let nextChecklistItemId = 1;
 let nextBoostId = 1;
 let boostScanPreviewRows = []; // AI 스캔 직후 확인 대기 중인 행들
 
@@ -1297,6 +1487,9 @@ async function loadFromRemote() {
     nextSaleId = data.nextSaleId || 1;
     boosts = data.boosts || [];
     nextBoostId = data.nextBoostId || (boosts.length + 1);
+    checklistCategories = data.checklistCategories || [];
+    nextCategoryId = data.nextCategoryId || (checklistCategories.length + 1);
+    nextChecklistItemId = data.nextChecklistItemId || 1;
     setRemoteStatusUI("ok");
     return true;
   } catch (e) {
@@ -1313,7 +1506,7 @@ async function saveToRemoteNow() {
       // text/plain으로 보내야 브라우저가 CORS 프리플라이트(OPTIONS)를 안 보내고,
       // Apps Script 쪽에서는 e.postData.contents를 그냥 JSON으로 파싱한다.
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ key: REMOTE_WRITE_KEY, data: { items, nextItemId, nextSaleId, boosts, nextBoostId } }),
+      body: JSON.stringify({ key: REMOTE_WRITE_KEY, data: { items, nextItemId, nextSaleId, boosts, nextBoostId, checklistCategories, nextCategoryId, nextChecklistItemId } }),
     });
     const json = await res.json();
     setRemoteStatusUI(json.ok ? "ok" : "error");
@@ -1343,6 +1536,9 @@ function loadFromLocalStorage() {
     nextSaleId = data.nextSaleId || 1;
     boosts = data.boosts || [];
     nextBoostId = data.nextBoostId || (boosts.length + 1);
+    checklistCategories = data.checklistCategories || [];
+    nextCategoryId = data.nextCategoryId || (checklistCategories.length + 1);
+    nextChecklistItemId = data.nextChecklistItemId || 1;
     return true;
   } catch (e) {
     return false;
@@ -1350,7 +1546,7 @@ function loadFromLocalStorage() {
 }
 function saveToLocalStorage() {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ items, nextItemId, nextSaleId, boosts, nextBoostId }));
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({ items, nextItemId, nextSaleId, boosts, nextBoostId, checklistCategories, nextCategoryId, nextChecklistItemId }));
   } catch (e) {
     // 저장소 접근 불가(예: Claude 아티팩트 샌드박스, 프라이빗 브라우징 등) — 조용히 무시
   }
