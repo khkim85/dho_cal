@@ -424,7 +424,7 @@ async function handleBoostScanFiles(files) {
   statusEl.textContent = '이미지 분석 중... (' + imageFiles.length + '장)';
   try {
     const images = await Promise.all(imageFiles.map(async (f) => ({ mimeType: f.type, data: await fileToBase64(f) })));
-    const res = await fetch('/.netlify/functions/scan-boost-schedule', {
+    const res = await fetch('/scan-boost-schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ images }),
@@ -1090,7 +1090,7 @@ async function handleAiScanFiles(files) {
       data: await fileToBase64(f),
     })));
 
-    const res = await fetch("/.netlify/functions/scan-trade-image", {
+    const res = await fetch("/scan-trade-image", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ images }),
