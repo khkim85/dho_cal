@@ -443,6 +443,15 @@ async function handleBoostScanFiles(files) {
   }
 }
 
+function isBoostDuplicate(row) {
+  const parts = (row.date || '').split('.');
+  const month = parseInt(parts[0], 10);
+  const day = parseInt(parts[1], 10);
+  if (!month || !day || row.hour == null) return false;
+  const iso = '2026-' + String(month).padStart(2,'0') + '-' + String(day).padStart(2,'0') + 'T' + String(row.hour).padStart(2,'0') + ':00:00';
+  return boosts.some(b => b.region === row.region && b.kind === row.kind && b.time === iso);
+}
+
 function renderBoostScanPreview() {
   const box = document.getElementById('boostScanPreview');
   box.innerHTML = '';
@@ -452,10 +461,11 @@ function renderBoostScanPreview() {
     const div = document.createElement('div');
     div.className = 'boost-preview-row';
     const itemsText = (row.items || []).map(it => it.name + (it.priceRange ? '(' + it.priceRange + ')' : '')).join(', ');
+    const dup = isBoostDuplicate(row);
     div.innerHTML =
-      "<input type='checkbox' class='boost-preview-check' data-idx='" + idx + "' checked>" +
+      "<input type='checkbox' class='boost-preview-check' data-idx='" + idx + "'" + (dup ? "" : " checked") + ">" +
       "<div>" +
-        "<div><strong>" + (row.date || '?') + " " + (row.hour != null ? row.hour + '시' : '?') + "</strong> · " + row.region + " · " + row.kind + "</div>" +
+        "<div><strong>" + (row.date || '?') + " " + (row.hour != null ? row.hour + '시' : '?') + "</strong> · " + row.region + " · " + row.kind + (dup ? " <span style='color:var(--text-muted); font-size:11px;'>(이미 등록됨)</span>" : "") + "</div>" +
         "<div style='color:var(--text-muted); font-size:12px;'>" + (itemsText || '(추천 품목 없음)') + "</div>" +
       "</div>";
     box.appendChild(div);
@@ -1022,9 +1032,11 @@ function fillBulkBoxWithScanLines(itemId, linesText) {
   }, 0);
 }
 
-function rowsToLinesText(rows) {
+function rowsToLinesText(rows, existingSales) {
+  const existing = existingSales || [];
   return (rows || [])
     .filter(r => r && r.city && r.price)
+    .filter(r => !existing.some(s => s.city === r.city && Number(s.price) === Number(r.price)))
     .map(r => r.city + "," + (r.marketRate != null ? r.marketRate : 100) + "," + r.price)
     .join("\n");
 }
@@ -1076,14 +1088,15 @@ async function handleAiScanFiles(files) {
       statusEl.textContent = "도시별 가격 정보를 찾지 못했습니다. 다른 스크린샷으로 시도해주세요.";
       return;
     }
-    const linesText = rowsToLinesText(rows);
-
     const matched = itemName
       ? items.find(i => i.name.trim().toLowerCase() === itemName.toLowerCase())
       : null;
+    const linesText = rowsToLinesText(rows, matched ? matched.sales : []);
+    const skipped = rows.filter(r => r && r.city && r.price).length - linesText.split("\n").filter(Boolean).length;
 
     if (matched) {
-      statusEl.textContent = "'" + matched.name + "'에 " + rows.length + "건을 찾아서 일괄입력 칸에 채워넣었습니다. 아래에서 확인 후 '일괄 추가'를 눌러주세요.";
+      const skipNote = skipped > 0 ? " (중복 " + skipped + "건은 제외)" : "";
+      statusEl.textContent = "'" + matched.name + "'에 " + rows.length + "건을 찾아서 일괄입력 칸에 채워넣었습니다" + skipNote + ". 아래에서 확인 후 '일괄 추가'를 눌러주세요.";
       openItemId = matched.id;
       render();
       fillBulkBoxWithScanLines(matched.id, linesText);
@@ -1331,11 +1344,32 @@ window.addEventListener("beforeunload", (e) => {
   }
 });
 
+// 24시간 넘게 지난 부양 항목은 자동 삭제 (안 지우면 계속 쌓이므로)
+function cleanupOldBoosts() {
+  const cutoff = Date.now() - 24 * 3600000;
+  const before = boosts.length;
+  boosts = boosts.filter(b => new Date(b.time).getTime() >= cutoff);
+  return boosts.length !== before;
+}
+
 (async function init() {
   const remoteOk = await loadFromRemote();
   if (!remoteOk) loadFromLocalStorage(); // 원격 실패 시에만 로컬 백업으로 대체
+  if (cleanupOldBoosts()) {
+    hasUnsavedChanges = true;
+    saveToLocalStorage();
+    scheduleRemoteSave();
+  }
   render();
 })();
+setInterval(() => {
+  if (cleanupOldBoosts()) {
+    hasUnsavedChanges = true;
+    saveToLocalStorage();
+    scheduleRemoteSave();
+    if (document.getElementById('tabPanelSchedule').style.display !== 'none') renderHypeTab();
+  }
+}, 30 * 60000);
 </script>
 </body>
 </html>
