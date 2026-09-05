@@ -89,13 +89,14 @@
   .main-tab-btn:hover { color: var(--text); }
 
   .hype-row {
-    display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; padding: 14px 12px; border-bottom: 1px solid var(--border);
     font-size: 13px; flex-wrap: wrap;
   }
   .hype-row.past { opacity: 0.45; }
   .hype-row.now { background: #3a2f1f; border-radius: 6px; }
   .hype-row.boost-type { background: #22283f; border-radius: 6px; }
   .boost-items { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+  .boost-badge { font-size: 11px; background: #23392a; color: #7ec996; border-radius: 4px; padding: 2px 7px; font-weight: 700; margin-left: 4px; }
   .hype-time { width: 90px; flex-shrink: 0; font-variant-numeric: tabular-nums; color: var(--text-muted); font-weight: 700; }
   .hype-region { width: 130px; flex-shrink: 0; font-weight: 700; }
   .hype-kind { width: 70px; flex-shrink: 0; font-weight: 700; }
@@ -224,7 +225,7 @@ function renderHypeTab() {
     row.innerHTML =
       "<span class='hype-time'>" + formatKST(ev.time) + "</span>" +
       "<span class='hype-region'>" + ev.region + "</span>" +
-      "<span class='hype-kind'>" + ev.kind + (isBoost ? ' (부양)' : '') + "</span>" +
+      "<span class='hype-kind'>" + ev.kind + "</span>" + (isBoost ? "<span class='boost-badge'>부양</span>" : "") +
       "<span class='hype-countdown'>" + formatCountdown(diffMs) + "</span>" +
       itemsHtml;
     container.appendChild(row);
