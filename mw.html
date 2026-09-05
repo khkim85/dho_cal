@@ -353,9 +353,9 @@ function renderHypeTab() {
     const row = document.createElement('div');
     row.className = 'hype-row' + (isPast ? ' past' : '') + (isNow && !isBoost ? ' now' : '') + (isBoost ? ' boost-type' : '');
     const itemsHtml = isBoost && ev.items.length > 0
-      ? "<div class='boost-items' style='margin-top:4px;'>" + ev.items.map(it =>
+      ? ev.items.map(it =>
           "<span class='boost-item-chip'>" + it.name + (it.priceRange ? ' ' + it.priceRange : '') + "</span>"
-        ).join('') + "</div>"
+        ).join('')
       : '';
     const cats = KIND_CATEGORIES[ev.kind] || [];
     const catsHtml = cats.map(c => "<span class='boost-badge'>" + c + "</span>").join('');
@@ -365,9 +365,9 @@ function renderHypeTab() {
         "<span class='hype-region'>" + ev.region + "</span>" +
         "<span class='hype-kind'>" + ev.kind + "</span>" +
         catsHtml +
+        itemsHtml +
         (isBoost ? "<button class='small danger boost-del-btn' data-id='" + ev.id + "' style='margin-left:auto;'>삭제</button>" : "") +
       "</div>";
-    if (itemsHtml) row.insertAdjacentHTML('beforeend', itemsHtml);
     container.appendChild(row);
   });
 
