@@ -768,16 +768,36 @@ function makeItemCard(item) {
     if (!cityQuery) { resultSpan.textContent = "도시를 입력해주세요."; return; }
     const allSales = item.sales || [];
     if (allSales.length === 0) { resultSpan.textContent = "이 교역품에 기록된 판매가가 없습니다."; return; }
-    // 순수가치는 이 교역품의 전체 판매 기록 평균으로 추정 (도시와 무관한 품목 고유값이라는 가정)
-    const avgBase = allSales.reduce((sum, s) => sum + itemIntrinsicValue(s, item), 0) / allSales.length;
-    const regionBonus = getRegionBonus(cityQuery, item.category, item.name);
-    const seasonBonus = getSeasonBonus(cityQuery, item.category);
-    const estimated = avgBase * (1 + (regionBonus + seasonBonus) / 100) * (marketInput / 100);
-    const culture = getCulture(cityQuery);
-    const region = getRegion(cityQuery);
-    resultSpan.textContent = "예상가: " + Math.round(estimated).toLocaleString() +
-      " (순수가치 " + Math.round(avgBase).toLocaleString() + " × 지역우대" + regionBonus + "%+시즌우대" + seasonBonus + "% × 시세" + marketInput + "%" +
-      (culture ? ", 문화권:" + culture : "") + (region ? "/지역:" + region : "") + ")";
+
+    const targetRegion = getRegion(cityQuery);
+    let estimated, sourceLabel;
+
+    // 1순위: 이 도시 자체에 실측 기록이 있으면 그대로 사용 (거리 효과가 이미 반영된 실제 값)
+    const exactSales = allSales.filter(s => s.city === cityQuery);
+    if (exactSales.length > 0) {
+      const avgBaseHere = exactSales.reduce((sum, s) => sum + baseSalePrice(s, item), 0) / exactSales.length;
+      estimated = avgBaseHere * (marketInput / 100);
+      sourceLabel = "실측 (" + cityQuery + " 기록 " + exactSales.length + "건 평균, 시세만 재적용)";
+    } else {
+      // 2순위: 같은 지역(리전) 안의 다른 도시 기록으로만 평균 (거리가 비슷한 도시끼리만 묶음)
+      const regionSales = targetRegion ? allSales.filter(s => getRegion(s.city) === targetRegion) : [];
+      if (regionSales.length > 0) {
+        const avgIntrinsic = regionSales.reduce((sum, s) => sum + itemIntrinsicValue(s, item), 0) / regionSales.length;
+        const regionBonus = getRegionBonus(cityQuery, item.category, item.name);
+        const seasonBonus = getSeasonBonus(cityQuery, item.category);
+        estimated = avgIntrinsic * (1 + (regionBonus + seasonBonus) / 100) * (marketInput / 100);
+        sourceLabel = "같은 지역(" + targetRegion + ") 내 " + regionSales.length + "건 평균 — 전역 평균 아님";
+      } else {
+        // 3순위: 어쩔 수 없이 전체 평균 (거리 효과가 섞여 있어 신뢰도 낮음)
+        const avgIntrinsic = allSales.reduce((sum, s) => sum + itemIntrinsicValue(s, item), 0) / allSales.length;
+        const regionBonus = getRegionBonus(cityQuery, item.category, item.name);
+        const seasonBonus = getSeasonBonus(cityQuery, item.category);
+        estimated = avgIntrinsic * (1 + (regionBonus + seasonBonus) / 100) * (marketInput / 100);
+        sourceLabel = "⚠ 이 지역 기록 없음 — 전체 평균 사용 (거리 효과 미반영, 신뢰도 낮음)";
+      }
+    }
+
+    resultSpan.textContent = "예상가: " + Math.round(estimated).toLocaleString() + " — " + sourceLabel;
   });
 
   const table = document.createElement("table");
