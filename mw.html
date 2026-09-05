@@ -165,6 +165,8 @@
   .craft-city-list { display: flex; flex-direction: column; gap: 6px; }
   .craft-city-row-line { display: grid; grid-template-columns: repeat(5, minmax(90px, 150px)); gap: 4px 14px; }
 
+  .collection-groups-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .collection-group-col { flex: 1 1 340px; min-width: 0; overflow-x: auto; }
   .collection-group-title { font-weight: 700; font-size: 14px; margin: 18px 0 6px; }
   .collection-progress { font-size: 12px; color: var(--text-muted); font-weight: 400; margin-left: 8px; }
   .collection-table { width: 100%; border-collapse: collapse; margin-bottom: 6px; table-layout: fixed; }
@@ -183,7 +185,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-08</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-09</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -754,12 +756,18 @@ function renderCollectionChecklist() {
   const container = document.getElementById('collectionContainer');
   container.innerHTML = '';
 
+  const row = document.createElement('div');
+  row.className = 'collection-groups-row';
+
   COLLECTION_GROUP_ORDER.forEach(group => {
     const rows = collectionItems.filter(e => e.group === group);
     if (rows.length === 0) return;
     const doneCount = rows.filter(e => e.checked).length;
     const pct = Math.round((doneCount / rows.length) * 100);
     const isOpen = collectionGroupOpen[group];
+
+    const col = document.createElement('div');
+    col.className = 'collection-group-col';
 
     const titleDiv = document.createElement('div');
     titleDiv.className = 'collection-group-title';
@@ -769,24 +777,27 @@ function renderCollectionChecklist() {
       collectionGroupOpen[group] = !collectionGroupOpen[group];
       renderCollectionChecklist();
     });
-    container.appendChild(titleDiv);
+    col.appendChild(titleDiv);
 
-    if (!isOpen) return;
-
-    const table = document.createElement('table');
-    table.className = 'collection-table';
-    table.innerHTML = "<tr><th>유형</th><th>완료</th><th>분류</th><th>등급</th><th>수집명</th></tr>" +
-      rows.map(e =>
-        "<tr class='" + (e.checked ? 'done' : '') + "' data-id='" + e.id + "'>" +
-          "<td>" + e.type + "</td>" +
-          "<td><input type='checkbox' class='collection-check' data-id='" + e.id + "'" + (e.checked ? ' checked' : '') + "></td>" +
-          "<td>" + e.category + "</td>" +
-          "<td>" + e.grade + "</td>" +
-          "<td class='collection-name'>" + e.name + "</td>" +
-        "</tr>"
-      ).join('');
-    container.appendChild(table);
+    if (isOpen) {
+      const table = document.createElement('table');
+      table.className = 'collection-table';
+      table.innerHTML = "<tr><th>유형</th><th>완료</th><th>분류</th><th>등급</th><th>수집명</th></tr>" +
+        rows.map(e =>
+          "<tr class='" + (e.checked ? 'done' : '') + "' data-id='" + e.id + "'>" +
+            "<td>" + e.type + "</td>" +
+            "<td><input type='checkbox' class='collection-check' data-id='" + e.id + "'" + (e.checked ? ' checked' : '') + "></td>" +
+            "<td>" + e.category + "</td>" +
+            "<td>" + e.grade + "</td>" +
+            "<td class='collection-name'>" + e.name + "</td>" +
+          "</tr>"
+        ).join('');
+      col.appendChild(table);
+    }
+    row.appendChild(col);
   });
+
+  container.appendChild(row);
 
   container.querySelectorAll('.collection-check').forEach(cb => {
     cb.addEventListener('change', () => {
