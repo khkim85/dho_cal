@@ -56,6 +56,15 @@
   button.danger:hover { background: #f7e8e4; }
 
   .panel { border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 14px; margin-bottom: 16px; }
+
+  .suggest-box {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+    max-height: 220px; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--border-strong); border-radius: 6px;
+    margin-top: 2px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+  .suggest-item { padding: 7px 10px; font-size: 13px; cursor: pointer; }
+  .suggest-item:hover { background: #2a2e34; }
   .form-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .form-grid label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 3px; }
   .form-grid > div { display: flex; flex-direction: column; }
@@ -185,7 +194,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-10</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-11</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -232,60 +241,17 @@
     </div>
     <div>
       <label>분류</label>
-      <div style="display:flex; gap:4px;">
-        <input type="text" id="itemCategoryInput" list="categoryOptions" placeholder="입력하면 자동완성" style="flex:1;">
-        <button type="button" class="small" id="itemCategoryDropdownBtn" title="전체 목록 보기" style="padding:0 8px;">▼</button>
+      <div style="position:relative;">
+        <input type="text" id="itemCategoryInput" placeholder="입력하면 자동완성" autocomplete="off" style="width:100%;">
+        <div id="itemCategorySuggest" class="suggest-box" style="display:none;"></div>
       </div>
-      <datalist id="categoryOptions">
-        <option value="식료품"></option>
-        <option value="조미료"></option>
-        <option value="가축"></option>
-        <option value="의약품"></option>
-        <option value="잡화"></option>
-        <option value="주류"></option>
-        <option value="염료"></option>
-        <option value="광석"></option>
-        <option value="공업품"></option>
-        <option value="기호품"></option>
-        <option value="섬유"></option>
-        <option value="직물"></option>
-        <option value="공예품"></option>
-        <option value="미술품"></option>
-        <option value="향신료"></option>
-        <option value="귀금속"></option>
-        <option value="향료"></option>
-        <option value="보석"></option>
-        <option value="무기류"></option>
-        <option value="총포류"></option>
-        <option value="기타"></option>
-      </datalist>
     </div>
     <div>
       <label>획득처</label>
-      <div style="display:flex; gap:4px;">
-        <input type="text" id="itemOriginInput" list="originOptions" placeholder="입력하면 자동완성" style="flex:1;">
-        <button type="button" class="small" id="itemOriginDropdownBtn" title="전체 목록 보기" style="padding:0 8px;">▼</button>
+      <div style="position:relative;">
+        <input type="text" id="itemOriginInput" placeholder="입력하면 자동완성" autocomplete="off" style="width:100%;">
+        <div id="itemOriginSuggest" class="suggest-box" style="display:none;"></div>
       </div>
-      <datalist id="originOptions">
-        <option value="북극"></option>
-        <option value="북해"></option>
-        <option value="서지중해 및 대서양"></option>
-        <option value="동지중해"></option>
-        <option value="서아프리카"></option>
-        <option value="남아프리카"></option>
-        <option value="동아프리카"></option>
-        <option value="아라비아&서인도"></option>
-        <option value="동인도&인도차이나"></option>
-        <option value="남아시아"></option>
-        <option value="동아시아"></option>
-        <option value="극동아시아"></option>
-        <option value="호주"></option>
-        <option value="동부 오세아니아"></option>
-        <option value="태평양"></option>
-        <option value="서아메리카"></option>
-        <option value="북아메리카&카리브해"></option>
-        <option value="남서부 아메리카"></option>
-      </datalist>
     </div>
   </div>
   <div class="row">
@@ -1621,18 +1587,55 @@ function attachAutocompleteEnter(input, datalistId, submitFn) {
     }
   });
 }
-function showFullDatalist(inputId) {
-  const input = document.getElementById(inputId);
-  input.value = "";
-  input.focus();
-  // 일부 브라우저는 값이 바뀐 직후 다시 포커스를 줘야 전체 목록을 띄운다
-  setTimeout(() => { input.blur(); input.focus(); }, 0);
-}
-document.getElementById("itemCategoryDropdownBtn").addEventListener("click", () => showFullDatalist("itemCategoryInput"));
-document.getElementById("itemOriginDropdownBtn").addEventListener("click", () => showFullDatalist("itemOriginInput"));
 
-attachAutocompleteEnter(document.getElementById("itemCategoryInput"), "categoryOptions", () => document.getElementById("doAddItem").click());
-attachAutocompleteEnter(document.getElementById("itemOriginInput"), "originOptions", () => document.getElementById("doAddItem").click());
+const CATEGORY_LIST = ["식료품","조미료","가축","의약품","잡화","주류","염료","광석","공업품","기호품","섬유","직물","공예품","미술품","향신료","귀금속","향료","보석","무기류","총포류","기타"];
+const ORIGIN_LIST = ["북극","북해","서지중해 및 대서양","동지중해","서아프리카","남아프리카","동아프리카","아라비아&서인도","동인도&인도차이나","남아시아","동아시아","극동아시아","호주","동부 오세아니아","태평양","서아메리카","북아메리카&카리브해","남서부 아메리카"];
+
+// 한글 IME 조합 타이밍 문제를 피하려고, 브라우저 기본 datalist 대신 직접 만든 자동완성 목록.
+// input/compositionend/focus 이벤트를 다 걸어서, 한글 조합 중간에도 목록이 안 밀리게 한다.
+function setupCustomAutocomplete(inputId, suggestBoxId, optionsList, onSubmit) {
+  const input = document.getElementById(inputId);
+  const box = document.getElementById(suggestBoxId);
+
+  function renderSuggestions(filter) {
+    const f = filter.trim().toLowerCase();
+    const matches = f === "" ? optionsList : optionsList.filter(o => o.toLowerCase().includes(f));
+    if (matches.length === 0) { box.style.display = "none"; box.innerHTML = ""; return; }
+    box.innerHTML = matches.map(o => "<div class='suggest-item' data-value=\"" + o.replace(/"/g, "&quot;") + "\">" + o + "</div>").join("");
+    box.style.display = "block";
+    box.querySelectorAll(".suggest-item").forEach(item => {
+      item.addEventListener("mousedown", (e) => {
+        e.preventDefault(); // input의 blur보다 먼저 실행되도록
+        input.value = item.dataset.value;
+        box.style.display = "none";
+        input.focus();
+      });
+    });
+  }
+
+  input.addEventListener("input", () => renderSuggestions(input.value));
+  input.addEventListener("compositionend", () => renderSuggestions(input.value));
+  input.addEventListener("focus", () => renderSuggestions(input.value));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const current = input.value.trim();
+      const exact = optionsList.find(o => o.toLowerCase() === current.toLowerCase());
+      if (exact) { input.value = exact; box.style.display = "none"; onSubmit(); return; }
+      const prefix = current ? optionsList.find(o => o.toLowerCase().startsWith(current.toLowerCase())) : null;
+      if (prefix) { input.value = prefix; renderSuggestions(prefix); return; } // 자동완성만 하고, 한 번 더 Enter 눌러야 제출
+      box.style.display = "none";
+      onSubmit(); // 목록에 없는 자유 입력이거나 빈 값이면 그냥 제출
+    }
+    if (e.key === "Escape") { box.style.display = "none"; }
+  });
+  document.addEventListener("click", (e) => {
+    if (!input.contains(e.target) && !box.contains(e.target)) box.style.display = "none";
+  });
+}
+
+setupCustomAutocomplete("itemCategoryInput", "itemCategorySuggest", CATEGORY_LIST, () => document.getElementById("doAddItem").click());
+setupCustomAutocomplete("itemOriginInput", "itemOriginSuggest", ORIGIN_LIST, () => document.getElementById("doAddItem").click());
 
 // ── 필터 ──────────────────────────────────────────
 document.getElementById("searchInput").addEventListener("input", (e) => {
