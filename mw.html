@@ -91,7 +91,10 @@
   .tag.origin { background: #23392a; color: #7ec996; }
   .item-best {
     font-size: 12px; color: var(--accent); font-weight: 600; white-space: nowrap;
+    display: flex; gap: 8px; width: 260px; flex-shrink: 0;
   }
+  .item-best .best-label { width: 90px; flex-shrink: 0; color: var(--text-muted); font-weight: 400; }
+  .item-best .best-value { flex: 1; text-align: right; }
   .item-body { display: none; padding: 0 14px 14px; border-top: 1px solid var(--border); }
   .item-body.open { display: block; }
 
@@ -194,7 +197,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-14</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-15</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -1105,9 +1108,9 @@ function makeItemCard(item) {
   const best = bestSale(item);
   const bestLabel = document.createElement("div");
   bestLabel.className = "item-best";
-  bestLabel.textContent = best
-    ? "최고 기준단가: " + best.city + " (" + Math.round(baseSalePrice(best, item)).toLocaleString() + ")"
-    : "판매 기록 없음";
+  bestLabel.innerHTML = best
+    ? "<span class='best-label'>최고 기준단가</span><span class='best-value'>" + best.city + " (" + Math.round(baseSalePrice(best, item)).toLocaleString() + ")</span>"
+    : "<span class='best-label'></span><span class='best-value' style='color:var(--text-muted); font-weight:400;'>판매 기록 없음</span>";
 
   const noFilterActive = !searchTerm && !filterSource && !filterCategory && !filterOrigin;
   const reorderBox = document.createElement("div");
