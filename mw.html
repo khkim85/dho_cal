@@ -199,7 +199,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-18</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-19</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -602,7 +602,7 @@ function renderChecklistTab() {
     };
     btn.addEventListener('click', doAdd);
     btn.parentElement.querySelector('.checklist-new-item-input').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); doAdd(); }
+      if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); doAdd(); }
     });
   });
 }
@@ -621,7 +621,7 @@ document.getElementById('addCategoryBtn').addEventListener('click', () => {
   renderChecklistTab();
 });
 document.getElementById('newCategoryNameInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('addCategoryBtn').click(); }
+  if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); document.getElementById('addCategoryBtn').click(); }
 });
 
 // ── 강화 재료 (지역별 체크 / 티어별 참고표, 같은 데이터 공유) ──
@@ -1415,7 +1415,7 @@ function makeItemCard(item) {
   addRow.querySelectorAll("input").forEach(input => {
     if (input.classList.contains("sale-city-input")) return;
     input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); addRow.querySelector(".sale-add-btn").click(); }
+      if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); addRow.querySelector(".sale-add-btn").click(); }
     });
   });
   attachAutocompleteEnter(
@@ -1524,7 +1524,7 @@ document.getElementById("doAddItem").addEventListener("click", () => {
   }
 });
 document.getElementById("itemNameInput").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { e.preventDefault(); document.getElementById("doAddItem").click(); }
+  if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); document.getElementById("doAddItem").click(); }
 });
 
 // ── AI 스캔 등록 ──────────────────────────────────
@@ -1660,6 +1660,7 @@ function attachAutocompleteEnter(input, datalistId, submitFn) {
   const datalist = document.getElementById(datalistId);
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
+    if (e.isComposing || e.keyCode === 229) return; // 한글 조합 확정용 Enter는 무시
     e.preventDefault();
     const current = input.value.trim().toLowerCase();
     if (!current) { submitFn(); return; }
@@ -1712,6 +1713,9 @@ function setupCustomAutocomplete(inputId, suggestBoxId, optionsList, onSubmit) {
   input.addEventListener("focus", () => renderSuggestions(input.value));
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
+      // 한글 조합 중에 눌린 Enter(조합 확정용)는 무시 — 이걸 그냥 처리하면
+      // "직" 입력 중 첫 Enter가 씹히고 두 번째부터 반응하는 것처럼 느껴진다.
+      if (e.isComposing || e.keyCode === 229) return;
       e.preventDefault();
       const current = input.value.trim();
       const exact = optionsList.find(o => o.toLowerCase() === current.toLowerCase());
