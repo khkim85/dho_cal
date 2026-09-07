@@ -75,7 +75,7 @@
   .filter-row { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
   .filter-row select, .filter-row input { min-width: 140px; }
 
-  .item-list { display: flex; flex-direction: column; gap: 10px; }
+  .item-list { display: flex; flex-direction: column; gap: 10px; max-height: 640px; overflow-y: auto; padding-right: 4px; }
   .item-card { border: 1px solid var(--border); border-radius: 8px; background: var(--card); overflow: hidden; }
   .item-head {
     display: flex; justify-content: space-between; align-items: center;
@@ -194,7 +194,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-11</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-12</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -1107,8 +1107,46 @@ function makeItemCard(item) {
     ? "최고 기준단가: " + best.city + " (" + Math.round(baseSalePrice(best, item)).toLocaleString() + ")"
     : "판매 기록 없음";
 
+  const noFilterActive = !searchTerm && !filterSource && !filterCategory && !filterOrigin;
+  const reorderBox = document.createElement("div");
+  reorderBox.style.cssText = "display:flex; flex-direction:column; gap:2px; margin-left:8px;";
+  if (noFilterActive) {
+    const idx = items.findIndex(i => i.id === item.id);
+    const upBtn = document.createElement("button");
+    upBtn.className = "small";
+    upBtn.textContent = "▲";
+    upBtn.disabled = idx <= 0;
+    upBtn.style.cssText = "padding:1px 6px; font-size:11px; line-height:1;";
+    upBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (idx <= 0) return;
+      [items[idx - 1], items[idx]] = [items[idx], items[idx - 1]];
+      hasUnsavedChanges = true;
+      saveToLocalStorage();
+      scheduleRemoteSave();
+      renderList();
+    };
+    const downBtn = document.createElement("button");
+    downBtn.className = "small";
+    downBtn.textContent = "▼";
+    downBtn.disabled = idx >= items.length - 1;
+    downBtn.style.cssText = "padding:1px 6px; font-size:11px; line-height:1;";
+    downBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (idx >= items.length - 1) return;
+      [items[idx + 1], items[idx]] = [items[idx], items[idx + 1]];
+      hasUnsavedChanges = true;
+      saveToLocalStorage();
+      scheduleRemoteSave();
+      renderList();
+    };
+    reorderBox.appendChild(upBtn);
+    reorderBox.appendChild(downBtn);
+  }
+
   head.appendChild(left);
   head.appendChild(bestLabel);
+  head.appendChild(reorderBox);
   head.onclick = () => {
     openItemId = (openItemId === item.id) ? null : item.id;
     renderList();
