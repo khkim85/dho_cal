@@ -194,7 +194,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-13</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-14</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -269,6 +269,8 @@
   </select>
   <select id="filterCategory"><option value="">분류 전체</option></select>
   <select id="filterOrigin"><option value="">획득처 전체</option></select>
+  <button id="sortByPriceDescBtn">기준단가 높은순</button>
+  <button id="sortByPriceAscBtn">기준단가 낮은순</button>
 </div>
 
 <div class="item-list" id="itemList"></div>
@@ -1692,6 +1694,26 @@ document.getElementById("filterOrigin").addEventListener("change", (e) => {
   filterOrigin = e.target.value;
   renderList();
 });
+
+function sortItemsByBestPrice(descending) {
+  const priceOf = (item) => {
+    const best = bestSale(item);
+    return best ? baseSalePrice(best, item) : null;
+  };
+  items.sort((a, b) => {
+    const pa = priceOf(a), pb = priceOf(b);
+    if (pa === null && pb === null) return 0;
+    if (pa === null) return 1;  // 기록 없는 품목은 항상 맨 뒤로
+    if (pb === null) return -1;
+    return descending ? pb - pa : pa - pb;
+  });
+  hasUnsavedChanges = true;
+  saveToLocalStorage();
+  scheduleRemoteSave();
+  renderList();
+}
+document.getElementById("sortByPriceDescBtn").addEventListener("click", () => sortItemsByBestPrice(true));
+document.getElementById("sortByPriceAscBtn").addEventListener("click", () => sortItemsByBestPrice(false));
 
 // ── 저장/불러오기 ──────────────────────────────────
 document.getElementById("saveBtn").addEventListener("click", () => {
