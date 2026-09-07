@@ -102,6 +102,8 @@
   table.sales-table { width: 100%; border-collapse: collapse; margin: 0; font-size: 13px; }
   table.sales-table th, table.sales-table td { text-align: center; padding: 6px 8px; border-bottom: 1px solid var(--border); }
   table.sales-table th { color: var(--text-muted); font-weight: 700; font-size: 11px; position: sticky; top: 0; background: var(--card); z-index: 1; }
+  table.sales-table th.sortable-th { cursor: pointer; user-select: none; }
+  table.sales-table th.sortable-th:hover { color: var(--text); }
   table.sales-table tr.best-row { background: #3a2f1f; }
   table.sales-table td.num { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
 
@@ -197,7 +199,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-16</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-17</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -272,8 +274,6 @@
   </select>
   <select id="filterCategory"><option value="">분류 전체</option></select>
   <select id="filterOrigin"><option value="">획득처 전체</option></select>
-  <button id="sortByPriceDescBtn">기준단가 높은순</button>
-  <button id="sortByPriceAscBtn">기준단가 낮은순</button>
 </div>
 
 <div class="item-list" id="itemList"></div>
@@ -1077,6 +1077,28 @@ function itemIntrinsicValue(sale, item) {
   return sale.price / (regionSeasonMultiplier * marketMultiplier);
 }
 
+// 각 품목의 판매 기록 표 헤더 클릭 정렬 상태 (item 객체 자체엔 저장 안 함 — 동기화 데이터에 안 섞이게)
+const itemSaleSort = {}; // { [itemId]: { col, dir } }
+function getSaleSortState(itemId) {
+  if (!itemSaleSort[itemId]) itemSaleSort[itemId] = { col: "기준단가", dir: "desc" };
+  return itemSaleSort[itemId];
+}
+function saleColumnValue(col, s, item) {
+  const b = saleBonuses(s, item);
+  switch (col) {
+    case "도시": return s.city || "";
+    case "지역": return getRegion(s.city) || "";
+    case "문화권": return getCulture(s.city) || "";
+    case "판매가": return s.price;
+    case "지역 우대%": return b.regionBonus;
+    case "시즌 우대%": return b.seasonBonus;
+    case "시세%": return b.marketBonus;
+    case "기준단가": return baseSalePrice(s, item);
+    case "비고": return s.note || "";
+    default: return "";
+  }
+}
+
 function bestSale(item) {
   if (!item.sales || item.sales.length === 0) return null;
   return item.sales.reduce((best, s) => (baseSalePrice(s, item) > baseSalePrice(best, item) ? s : best), item.sales[0]);
@@ -1241,8 +1263,20 @@ function makeItemCard(item) {
   const table = document.createElement("table");
   table.className = "sales-table";
   const bestId = best ? best.id : null;
-  const sortedSales = (item.sales || []).slice().sort((a, b) => baseSalePrice(b, item) - baseSalePrice(a, item));
-  table.innerHTML = "<tr><th>도시</th><th>지역</th><th>문화권</th><th>판매가</th><th>지역 우대%</th><th>시즌 우대%</th><th>시세%</th><th>기준단가</th><th>비고</th><th></th></tr>" +
+  const sortState = getSaleSortState(item.id);
+  const sortedSales = (item.sales || []).slice().sort((a, b) => {
+    const va = saleColumnValue(sortState.col, a, item);
+    const vb = saleColumnValue(sortState.col, b, item);
+    const cmp = (typeof va === "string" || typeof vb === "string")
+      ? String(va).localeCompare(String(vb), "ko")
+      : va - vb;
+    return sortState.dir === "asc" ? cmp : -cmp;
+  });
+  const SALE_COLUMNS = ["도시", "지역", "문화권", "판매가", "지역 우대%", "시즌 우대%", "시세%", "기준단가", "비고"];
+  table.innerHTML = "<tr>" + SALE_COLUMNS.map(col => {
+    const arrow = sortState.col === col ? (sortState.dir === "asc" ? " ▲" : " ▼") : "";
+    return "<th class='sortable-th' data-col=\"" + col + "\">" + col + arrow + "</th>";
+  }).join("") + "<th></th></tr>" +
     sortedSales.map(s => {
       const b = saleBonuses(s, item);
       const region = getRegion(s.city) || "-";
@@ -1287,6 +1321,21 @@ function makeItemCard(item) {
   tableWrap.className = "sales-table-wrap";
   tableWrap.appendChild(table);
   body.appendChild(tableWrap);
+
+  table.querySelectorAll(".sortable-th").forEach(th => {
+    th.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const col = th.dataset.col;
+      const state = getSaleSortState(item.id);
+      if (state.col === col) {
+        state.dir = state.dir === "asc" ? "desc" : "asc";
+      } else {
+        state.col = col;
+        state.dir = (col === "도시" || col === "지역" || col === "문화권" || col === "비고") ? "asc" : "desc";
+      }
+      renderList();
+    });
+  });
 
   table.querySelectorAll(".sale-del-btn").forEach(btn => {
     btn.addEventListener("click", (e) => {
@@ -1697,26 +1746,6 @@ document.getElementById("filterOrigin").addEventListener("change", (e) => {
   filterOrigin = e.target.value;
   renderList();
 });
-
-function sortItemsByBestPrice(descending) {
-  const priceOf = (item) => {
-    const best = bestSale(item);
-    return best ? baseSalePrice(best, item) : null;
-  };
-  items.sort((a, b) => {
-    const pa = priceOf(a), pb = priceOf(b);
-    if (pa === null && pb === null) return 0;
-    if (pa === null) return 1;  // 기록 없는 품목은 항상 맨 뒤로
-    if (pb === null) return -1;
-    return descending ? pb - pa : pa - pb;
-  });
-  hasUnsavedChanges = true;
-  saveToLocalStorage();
-  scheduleRemoteSave();
-  renderList();
-}
-document.getElementById("sortByPriceDescBtn").addEventListener("click", () => sortItemsByBestPrice(true));
-document.getElementById("sortByPriceAscBtn").addEventListener("click", () => sortItemsByBestPrice(false));
 
 // ── 저장/불러오기 ──────────────────────────────────
 document.getElementById("saveBtn").addEventListener("click", () => {
