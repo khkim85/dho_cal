@@ -184,6 +184,11 @@ window.addEventListener("mouseup", () => {
   if (!dragStart) return;
   const boxRect = selectionBox.getBoundingClientRect();
   const videoRect = video.getBoundingClientRect();
+  if (!video.videoWidth || !video.videoHeight) {
+    document.getElementById("regionHint").textContent = "영상이 아직 준비되지 않았습니다. 잠시 후 다시 드래그해주세요.";
+    dragStart = null;
+    return;
+  }
   if (boxRect.width > 10 && boxRect.height > 10) {
     // video의 "표시 크기" 기준 좌표를 "실제 영상 해상도" 기준 좌표로 환산
     const scaleX = video.videoWidth / videoRect.width;
@@ -204,17 +209,20 @@ window.addEventListener("mouseup", () => {
 function captureSelectionAsBase64() {
   if (!selection) return null;
   const canvas = document.createElement("canvas");
-  canvas.width = Math.round(selection.w);
-  canvas.height = Math.round(selection.h);
+  // 영역이 작으면 그대로 캡처했을 때 화질이 낮아 AI가 글자를 못 읽을 수 있어서, 최소 2배로 확대해서 캡처한다.
+  const scale = Math.max(1, Math.min(4, 700 / Math.max(selection.w, 1)));
+  canvas.width = Math.round(selection.w * scale);
+  canvas.height = Math.round(selection.h * scale);
   const ctx = canvas.getContext("2d");
   ctx.drawImage(video, selection.x, selection.y, selection.w, selection.h, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/png").split(",")[1];
+  const dataUrl = canvas.toDataURL("image/png");
+  return { base64: dataUrl.split(",")[1], dataUrl };
 }
 
-function addLogEntry(text) {
+function addLogEntry(text, thumbDataUrl) {
   const now = new Date();
   const timeStr = String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0") + ":" + String(now.getSeconds()).padStart(2,"0");
-  logEntries.push({ time: timeStr, text });
+  logEntries.push({ time: timeStr, text, thumb: thumbDataUrl });
   renderLog();
 }
 
@@ -229,30 +237,31 @@ function renderLog() {
     const isEmpty = e.text.trim() === "";
     const cls = isEmpty ? "empty" : (isUnchanged ? "unchanged" : "");
     const display = isEmpty ? "(텍스트 없음)" : (isUnchanged ? "(변화 없음)" : e.text);
-    return "<div class='log-entry'><div class='log-time'>" + e.time + "</div><div class='log-text " + cls + "'>" + display.replace(/</g,"&lt;") + "</div></div>";
+    const thumbHtml = e.thumb ? "<img src='" + e.thumb + "' style='max-width:220px; max-height:120px; border:1px solid var(--border-strong); border-radius:4px; display:block; margin-top:6px;'>" : "";
+    return "<div class='log-entry'><div class='log-time'>" + e.time + "</div><div class='log-text " + cls + "'>" + display.replace(/</g,"&lt;") + "</div>" + thumbHtml + "</div>";
   }).join("");
 }
 
 async function scanOnce() {
-  const b64 = captureSelectionAsBase64();
-  if (!b64) return;
+  const captured = captureSelectionAsBase64();
+  if (!captured) return;
   setStatus("busy", "읽는 중...");
   try {
     const res = await fetch("/scan-text", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: { mimeType: "image/png", data: b64 } }),
+      body: JSON.stringify({ image: { mimeType: "image/png", data: captured.base64 } }),
     });
     const json = await res.json();
     if (json.ok) {
-      addLogEntry(json.text || "");
+      addLogEntry(json.text || "", captured.dataUrl);
       setStatus("live", "감시 중");
     } else {
-      addLogEntry("(오류: " + (json.error || "알 수 없음") + ")");
+      addLogEntry("(오류: " + (json.error || "알 수 없음") + ")", captured.dataUrl);
       setStatus("live", "감시 중 (오류 발생)");
     }
   } catch (e) {
-    addLogEntry("(오류: " + e.message + ")");
+    addLogEntry("(오류: " + e.message + ")", captured.dataUrl);
     setStatus("live", "감시 중 (오류 발생)");
   }
 }
