@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>화면 감시 — 텍스트 지속 읽기</title>
+<style>
+  :root {
+    --bg: #16181c;
+    --card: #1e2126;
+    --border: #2d3138;
+    --border-strong: #3d434c;
+    --text: #e8e6e1;
+    --text-muted: #8b929c;
+    --accent: #d99a5b;
+  }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Pretendard", "Malgun Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  h1 { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+  .sub { color: var(--text-muted); font-size: 13px; margin: 0 0 20px; }
+  .panel { border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 16px; margin-bottom: 16px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  button {
+    font-family: inherit; font-size: 13px; padding: 8px 14px; border: 1px solid var(--border-strong);
+    border-radius: 6px; background: var(--card); color: var(--text); cursor: pointer;
+  }
+  button:hover { background: #2a2e34; }
+  button.primary { background: var(--accent); color: #1a1006; border-color: var(--accent); font-weight: 700; }
+  button.danger { color: #e08a70; border-color: #e08a70; background: none; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  select, input[type="number"] {
+    font-family: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--border-strong);
+    border-radius: 6px; background: var(--card); color: var(--text);
+  }
+  .hint { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; line-height: 1.6; }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .status-dot.idle { background: var(--text-muted); }
+  .status-dot.live { background: #7ec996; box-shadow: 0 0 6px #7ec996; }
+  .status-dot.busy { background: var(--accent); }
+
+  .capture-area { position: relative; display: inline-block; max-width: 100%; }
+  video { display: block; max-width: 100%; border-radius: 8px; border: 1px solid var(--border-strong); }
+  #selectionBox {
+    position: absolute; border: 2px solid var(--accent); background: rgba(217,154,91,0.15);
+    display: none; cursor: move; box-sizing: border-box;
+  }
+  .region-hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
+  .log-list { max-height: 420px; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 8px; }
+  .log-entry { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--card); }
+  .log-time { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+  .log-text { font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+  .log-text.unchanged { color: var(--text-muted); }
+  .log-text.empty { color: var(--text-muted); font-style: italic; }
+</style>
+</head>
+<body>
+
+<h1>화면 감시 — 텍스트 지속 읽기</h1>
+<p class="sub">화면(창/탭)의 특정 영역을 골라서, 일정 주기마다 그 안의 텍스트를 AI로 읽어 기록합니다.</p>
+
+<div class="panel">
+  <p class="hint">
+    1) "화면 공유 시작"을 누르고 감시할 창/화면을 선택하세요 (브라우저가 팝업으로 물어봅니다).<br>
+    2) 미리보기 화면 위에서 <strong>마우스로 드래그</strong>해서 읽고 싶은 영역을 지정하세요.<br>
+    3) 주기를 고르고 "감시 시작"을 누르면, 그 영역만 잘라서 주기적으로 AI가 텍스트를 읽어 아래에 기록합니다.<br>
+    브라우저 보안 정책상 화면 공유는 매번 직접 눌러서 시작해야 하고, 공유 중에는 브라우저가 표시를 계속 띄웁니다.
+  </p>
+  <div class="row">
+    <button class="primary" id="startShareBtn">🖥️ 화면 공유 시작</button>
+    <button id="stopShareBtn" disabled>화면 공유 중지</button>
+    <span style="width:1px; background:var(--border-strong); align-self:stretch;"></span>
+    <label style="font-size:13px;">주기:
+      <select id="intervalSelect">
+        <option value="5">5초</option>
+        <option value="10" selected>10초</option>
+        <option value="30">30초</option>
+        <option value="60">1분</option>
+      </select>
+    </label>
+    <button class="primary" id="startWatchBtn" disabled>▶ 감시 시작</button>
+    <button class="danger" id="stopWatchBtn" disabled>■ 감시 중지</button>
+    <span id="statusLabel" style="font-size:13px; margin-left:6px;"><span class="status-dot idle"></span>대기 중</span>
+  </div>
+
+  <div class="capture-area" id="captureArea">
+    <video id="video" autoplay muted></video>
+    <div id="selectionBox"></div>
+  </div>
+  <div class="region-hint" id="regionHint">화면 공유를 시작하면 여기에 미리보기가 뜹니다. 영역을 드래그로 지정해주세요.</div>
+</div>
+
+<div class="panel">
+  <div class="row" style="justify-content:space-between;">
+    <h2 style="font-size:15px; margin:0;">읽은 텍스트 기록</h2>
+    <div>
+      <button id="clearLogBtn">기록 지우기</button>
+      <button id="copyLogBtn">전체 복사</button>
+    </div>
+  </div>
+  <div id="logList" class="log-list">
+    <div class="log-entry"><div class="log-text empty">아직 기록이 없습니다.</div></div>
+  </div>
+</div>
+
+<script>
+let mediaStream = null;
+let watchTimer = null;
+let selection = null; // {x, y, w, h} — video 요소 기준 좌표(픽셀, 표시 크기 기준)
+let dragStart = null;
+let lastText = "";
+const logEntries = []; // {time, text}
+
+const video = document.getElementById("video");
+const selectionBox = document.getElementById("selectionBox");
+const captureArea = document.getElementById("captureArea");
+const statusLabel = document.getElementById("statusLabel");
+
+function setStatus(kind, label) {
+  statusLabel.innerHTML = "<span class='status-dot " + kind + "'></span>" + label;
+}
+
+// ── 화면 공유 시작/중지 ──────────────────────────────
+document.getElementById("startShareBtn").addEventListener("click", async () => {
+  try {
+    mediaStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" }, audio: false });
+    video.srcObject = mediaStream;
+    document.getElementById("stopShareBtn").disabled = false;
+    document.getElementById("startShareBtn").disabled = true;
+    document.getElementById("regionHint").textContent = "미리보기 위에서 드래그해서 읽을 영역을 지정하세요.";
+    mediaStream.getVideoTracks()[0].addEventListener("ended", stopSharing);
+  } catch (e) {
+    document.getElementById("regionHint").textContent = "화면 공유를 시작하지 못했습니다: " + e.message;
+  }
+});
+
+function stopSharing() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
+  video.srcObject = null;
+  document.getElementById("stopShareBtn").disabled = true;
+  document.getElementById("startShareBtn").disabled = false;
+  document.getElementById("startWatchBtn").disabled = true;
+  stopWatching();
+  document.getElementById("regionHint").textContent = "화면 공유가 중지되었습니다. 다시 시작하려면 위 버튼을 누르세요.";
+}
+document.getElementById("stopShareBtn").addEventListener("click", stopSharing);
+
+// ── 영역 드래그 선택 ─────────────────────────────────
+captureArea.addEventListener("mousedown", (e) => {
+  if (!mediaStream) return;
+  const rect = video.getBoundingClientRect();
+  dragStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  selectionBox.style.left = dragStart.x + "px";
+  selectionBox.style.top = dragStart.y + "px";
+  selectionBox.style.width = "0px";
+  selectionBox.style.height = "0px";
+  selectionBox.style.display = "block";
+});
+captureArea.addEventListener("mousemove", (e) => {
+  if (!dragStart) return;
+  const rect = video.getBoundingClientRect();
+  const curX = e.clientX - rect.left;
+  const curY = e.clientY - rect.top;
+  const x = Math.min(dragStart.x, curX);
+  const y = Math.min(dragStart.y, curY);
+  const w = Math.abs(curX - dragStart.x);
+  const h = Math.abs(curY - dragStart.y);
+  selectionBox.style.left = x + "px";
+  selectionBox.style.top = y + "px";
+  selectionBox.style.width = w + "px";
+  selectionBox.style.height = h + "px";
+});
+window.addEventListener("mouseup", () => {
+  if (!dragStart) return;
+  const boxRect = selectionBox.getBoundingClientRect();
+  const videoRect = video.getBoundingClientRect();
+  if (boxRect.width > 10 && boxRect.height > 10) {
+    // video의 "표시 크기" 기준 좌표를 "실제 영상 해상도" 기준 좌표로 환산
+    const scaleX = video.videoWidth / videoRect.width;
+    const scaleY = video.videoHeight / videoRect.height;
+    selection = {
+      x: (boxRect.left - videoRect.left) * scaleX,
+      y: (boxRect.top - videoRect.top) * scaleY,
+      w: boxRect.width * scaleX,
+      h: boxRect.height * scaleY,
+    };
+    document.getElementById("startWatchBtn").disabled = false;
+    document.getElementById("regionHint").textContent = "영역 지정 완료 (" + Math.round(selection.w) + "×" + Math.round(selection.h) + "px). 다시 드래그하면 영역을 바꿀 수 있습니다.";
+  }
+  dragStart = null;
+});
+
+// ── 캡처 + AI 텍스트 추출 ────────────────────────────
+function captureSelectionAsBase64() {
+  if (!selection) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(selection.w);
+  canvas.height = Math.round(selection.h);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, selection.x, selection.y, selection.w, selection.h, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/png").split(",")[1];
+}
+
+function addLogEntry(text) {
+  const now = new Date();
+  const timeStr = String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0") + ":" + String(now.getSeconds()).padStart(2,"0");
+  logEntries.push({ time: timeStr, text });
+  renderLog();
+}
+
+function renderLog() {
+  const list = document.getElementById("logList");
+  if (logEntries.length === 0) {
+    list.innerHTML = "<div class='log-entry'><div class='log-text empty'>아직 기록이 없습니다.</div></div>";
+    return;
+  }
+  list.innerHTML = logEntries.map((e, idx) => {
+    const isUnchanged = idx > 0 && logEntries[idx - 1].text === e.text;
+    const isEmpty = e.text.trim() === "";
+    const cls = isEmpty ? "empty" : (isUnchanged ? "unchanged" : "");
+    const display = isEmpty ? "(텍스트 없음)" : (isUnchanged ? "(변화 없음)" : e.text);
+    return "<div class='log-entry'><div class='log-time'>" + e.time + "</div><div class='log-text " + cls + "'>" + display.replace(/</g,"&lt;") + "</div></div>";
+  }).join("");
+}
+
+async function scanOnce() {
+  const b64 = captureSelectionAsBase64();
+  if (!b64) return;
+  setStatus("busy", "읽는 중...");
+  try {
+    const res = await fetch("/scan-text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: { mimeType: "image/png", data: b64 } }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      addLogEntry(json.text || "");
+      setStatus("live", "감시 중");
+    } else {
+      addLogEntry("(오류: " + (json.error || "알 수 없음") + ")");
+      setStatus("live", "감시 중 (오류 발생)");
+    }
+  } catch (e) {
+    addLogEntry("(오류: " + e.message + ")");
+    setStatus("live", "감시 중 (오류 발생)");
+  }
+}
+
+function stopWatching() {
+  if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
+  document.getElementById("startWatchBtn").disabled = !selection;
+  document.getElementById("stopWatchBtn").disabled = true;
+  setStatus("idle", "대기 중");
+}
+
+document.getElementById("startWatchBtn").addEventListener("click", () => {
+  if (!selection) return;
+  const seconds = Number(document.getElementById("intervalSelect").value);
+  scanOnce();
+  watchTimer = setInterval(scanOnce, seconds * 1000);
+  document.getElementById("startWatchBtn").disabled = true;
+  document.getElementById("stopWatchBtn").disabled = false;
+  setStatus("live", "감시 중");
+});
+document.getElementById("stopWatchBtn").addEventListener("click", stopWatching);
+
+document.getElementById("clearLogBtn").addEventListener("click", () => {
+  logEntries.length = 0;
+  renderLog();
+});
+document.getElementById("copyLogBtn").addEventListener("click", () => {
+  const text = logEntries.map(e => "[" + e.time + "] " + e.text).join("\n\n");
+  navigator.clipboard.writeText(text).then(() => {
+    alert("전체 기록을 클립보드에 복사했습니다.");
+  });
+});
+</script>
+</body>
+</html>
