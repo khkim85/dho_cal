@@ -291,6 +291,7 @@ function renderAccumulatedTable() {
   csvBox.value = accumulatedRows.map(r =>
     accumulatedFields.map(f => (r[f] || "").toString()).join(",")
   ).join("\n");
+  csvBox.scrollTop = csvBox.scrollHeight;
 }
 document.getElementById("clearAccumulatedBtn").addEventListener("click", () => {
   accumulatedRows = [];
