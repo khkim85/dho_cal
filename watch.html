@@ -94,15 +94,16 @@
     <label style="font-size:13px;">추출 방식:
       <select id="modeSelect">
         <option value="text">그냥 텍스트 그대로</option>
-        <option value="structured">구조화 항목 추출 (표)</option>
+        <option value="structured" selected>구조화 항목 추출 (표)</option>
       </select>
     </label>
-    <input type="text" id="fieldsInput" placeholder="예: 품목명,도시명" style="flex:1; min-width:200px; display:none;">
+    <input type="text" id="fieldsInput" placeholder="예: 품목명,도시명" value="품목명,도시명,시세,전체판매가" style="flex:1; min-width:200px;">
   </div>
-  <p class="hint" id="structuredHint" style="display:none;">화면에 반복되는 항목에서 뽑아낼 필드명을 콤마로 구분해서 입력하세요 (예: "품목명,도시명"). 스캔할 때마다 그 항목들로 표를 만들어서 보여주고, 아래에 누적 표도 같이 쌓입니다.</p>
-  <div class="row" id="extraInstructionRow" style="display:none;">
-    <input type="text" id="extraInstructionInput" placeholder="추가 지시사항 (선택) — 예: 왼쪽 목록에서 강조/선택된 항목 하나만 대상으로 하고, 오른쪽 표 전체를 그 하나에 매칭해라" style="flex:1;">
+  <p class="hint" id="structuredHint">화면에 반복되는 항목에서 뽑아낼 필드명을 콤마로 구분해서 입력하세요 (예: "품목명,도시명"). 스캔할 때마다 그 항목들로 표를 만들어서 보여주고, 아래에 누적 표도 같이 쌓입니다.</p>
+  <div class="row" id="extraInstructionRow">
+    <input type="text" id="extraInstructionInput" placeholder="추가 지시사항 (선택) — 예: 왼쪽 목록에서 강조/선택된 항목 하나만 대상으로 하고, 오른쪽 표 전체를 그 하나에 매칭해라" value='왼쪽 목록에서 노랗게 강조된 항목 하나만 대상으로 하고 오른쪽 표 전체를 그 하나에 매칭, 시세에 "%" 제거, 전체판매가에 "," 제거' style="flex:1;">
   </div>
+
 
   <div class="capture-area" id="captureArea">
     <video id="video" autoplay muted></video>
