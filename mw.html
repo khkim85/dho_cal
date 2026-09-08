@@ -199,7 +199,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-22</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-08-01</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -1971,7 +1971,7 @@ document.getElementById("resetAll").addEventListener("click", () => {
 // 진짜 영구 저장은 이 구글시트 웹앱을 통해 이루어진다.
 // SECRET_KEY는 이 파일 소스에 그대로 노출되므로(공개 사이트라 view-source 가능),
 // "아무나 실수로 못 건드리게" 하는 가벼운 잠금 정도로만 취급할 것.
-const REMOTE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzhRgZGT3nkrpNs6JqiOpUiMKTkcEEV29QMuDMuLZJwgdW1Ao_KeQR3t8yqRYmVp0yUFw/exec";
+const REMOTE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw8vdCX0Lt6sPk-kwwgr-cnT2D5QMzj7zFVWz9fe8AsYxCkQcZLavPa-jpZ8rzCkGSmSg/exec";
 const REMOTE_WRITE_KEY = "drummer4";
 let remoteSyncTimer = null;
 let remoteStatus = "idle"; // idle | syncing | ok | error
