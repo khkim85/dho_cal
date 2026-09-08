@@ -199,7 +199,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-19</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-20</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -211,12 +211,24 @@
 <div class="toolbar">
   <button class="primary" id="toggleAddItem">교역품 등록</button>
   <button class="primary" id="toggleAiScan">🤖 AI 스캔 등록</button>
+  <button class="primary" id="toggleBulkPaste">📋 통합 붙여넣기</button>
   <span style="width:1px; background:var(--border-strong); align-self:stretch;"></span>
   <button class="primary" id="saveBtn">저장 (파일로 내보내기)</button>
   <button id="loadBtn">불러오기</button>
   <input type="file" id="loadFile" accept="application/json" style="display:none;">
   <button id="resetAll">전체 초기화</button>
   <span id="remoteStatus" style="font-size:12px;"></span>
+</div>
+
+<div class="panel" id="bulkPastePanel" style="display:none;">
+  <h2>통합 붙여넣기</h2>
+  <p class="hint">한 줄에 하나씩, <strong>품목명,도시명,시세%,가격</strong> 형식으로 여러 품목을 한꺼번에 붙여넣으세요. 이미 있는 품목이면 판매 기록에 추가되고(중복은 자동 제외), 없는 품목이면 구분/분류/획득처가 빈 채로 새로 만들어집니다 — 새로 만들어진 품목은 나중에 "수정"으로 채워주세요.</p>
+  <textarea id="bulkPasteTextarea" rows="8" style="width:100%;" placeholder="예)&#10;중국화,반다,103,112213&#10;중국화,테르나테,100,109530&#10;골든씰,괌,105,70000"></textarea>
+  <div class="row">
+    <button class="primary small" id="bulkPasteSubmitBtn">일괄 등록</button>
+    <button class="small" id="bulkPasteCancelBtn">취소</button>
+  </div>
+  <div id="bulkPasteStatus" style="font-size:13px; color:var(--text-muted); margin-top:8px;"></div>
 </div>
 
 <div class="panel" id="aiScanPanel" style="display:none;">
@@ -1549,6 +1561,72 @@ function rowsToLinesText(rows, existingSales) {
     .map(r => r.city + "," + (r.marketRate != null ? r.marketRate : 100) + "," + r.price)
     .join("\n");
 }
+
+// ── 통합 붙여넣기 (품목명,도시명,시세%,가격 여러 줄 → 여러 품목에 자동 분배) ──
+document.getElementById("toggleBulkPaste").addEventListener("click", () => {
+  const el = document.getElementById("bulkPastePanel");
+  el.style.display = el.style.display === "block" ? "none" : "block";
+});
+document.getElementById("bulkPasteCancelBtn").addEventListener("click", () => {
+  document.getElementById("bulkPastePanel").style.display = "none";
+  document.getElementById("bulkPasteTextarea").value = "";
+  document.getElementById("bulkPasteStatus").textContent = "";
+});
+document.getElementById("bulkPasteSubmitBtn").addEventListener("click", () => {
+  const statusEl = document.getElementById("bulkPasteStatus");
+  const raw = document.getElementById("bulkPasteTextarea").value;
+  const lines = raw.split("\n").map(l => l.trim()).filter(Boolean);
+  if (lines.length === 0) { statusEl.textContent = "붙여넣은 내용이 없습니다."; return; }
+
+  // 품목명별로 묶기
+  const groups = {}; // { 품목명: [{city, marketRate, price}] }
+  let malformed = 0;
+  lines.forEach(line => {
+    const parts = line.split(/\t|,/).map(s => s.trim());
+    if (parts.length < 4) { malformed++; return; }
+    const [name, city, marketRateRaw, priceRaw] = parts;
+    const price = Number(priceRaw);
+    const marketRate = marketRateRaw !== "" ? Number(marketRateRaw) : 100;
+    if (!name || !city || !price) { malformed++; return; }
+    if (!groups[name]) groups[name] = [];
+    groups[name].push({ city, marketRate, price });
+  });
+
+  let addedSales = 0, skippedDup = 0, newItemsCreated = 0, updatedItems = 0;
+  const newItemNames = [];
+
+  Object.keys(groups).forEach(name => {
+    let item = items.find(i => i.name.trim().toLowerCase() === name.toLowerCase());
+    if (!item) {
+      item = { id: nextItemId++, name, source: "", category: "", origin: "", sales: [] };
+      items.push(item);
+      newItemsCreated++;
+      newItemNames.push(name);
+    } else {
+      updatedItems++;
+    }
+    if (!item.sales) item.sales = [];
+    groups[name].forEach(row => {
+      const isDup = item.sales.some(s => s.city === row.city && Number(s.price) === Number(row.price));
+      if (isDup) { skippedDup++; return; }
+      item.sales.push({ id: nextSaleId++, city: row.city, price: row.price, marketBonus: row.marketRate, note: "" });
+      addedSales++;
+    });
+  });
+
+  hasUnsavedChanges = true;
+  saveToLocalStorage();
+  scheduleRemoteSave();
+  render();
+
+  let msg = addedSales + "건 추가";
+  if (skippedDup > 0) msg += ", 중복 " + skippedDup + "건 제외";
+  if (newItemsCreated > 0) msg += ", 신규 품목 " + newItemsCreated + "개 생성(" + newItemNames.join(", ") + " — 구분/분류/획득처는 '수정'으로 채워주세요)";
+  if (updatedItems > 0) msg += ", 기존 품목 " + updatedItems + "개에 반영";
+  if (malformed > 0) msg += ". 형식이 안 맞아 건너뛴 줄 " + malformed + "개";
+  statusEl.textContent = msg;
+  document.getElementById("bulkPasteTextarea").value = "";
+});
 
 async function fileToBase64(file) {
   return new Promise((resolve, reject) => {
