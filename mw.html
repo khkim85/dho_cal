@@ -199,7 +199,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-21</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-06-22</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -223,6 +223,14 @@
 <div class="panel" id="bulkPastePanel" style="display:none;">
   <h2>통합 붙여넣기</h2>
   <p class="hint">한 줄에 하나씩, <strong>품목명,도시명,시세%,가격</strong> 형식으로 여러 품목을 한꺼번에 붙여넣으세요. 이미 있는 품목이면 판매 기록에 추가되고(중복은 자동 제외), 없는 품목이면 구분/분류/획득처가 빈 채로 새로 만들어집니다 — 새로 만들어진 품목은 나중에 "수정"으로 채워주세요.</p>
+
+  <div id="bulkPasteAiDropzone" style="border:2px dashed var(--border-strong); border-radius:8px; padding:18px; text-align:center; cursor:pointer; background:var(--card); margin-bottom:10px;">
+    <div style="font-size:13px; color:var(--text-muted);">🤖 스크린샷 여러 장 드래그/클릭 업로드 — 각 장마다 다른 품목이어도 됩니다</div>
+    <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">Ctrl+V로 붙여넣기도 가능 · PNG/JPG · 분석 결과는 아래 텍스트 칸에 채워지고, 확인 후 "일괄 등록"을 눌러야 반영됩니다</div>
+  </div>
+  <input type="file" id="bulkPasteAiFileInput" accept="image/png,image/jpeg" multiple style="display:none;">
+  <div id="bulkPasteAiStatus" style="font-size:13px; color:var(--text-muted); margin-bottom:10px;"></div>
+
   <textarea id="bulkPasteTextarea" rows="8" style="width:100%;" placeholder="예)&#10;중국화,반다,103,112213&#10;중국화,테르나테,100,109530&#10;골든씰,괌,105,70000"></textarea>
   <div class="row">
     <button class="primary small" id="bulkPasteSubmitBtn">일괄 등록</button>
@@ -1744,6 +1752,76 @@ window.addEventListener("paste", (e) => {
     .filter(it => it.type.startsWith("image/"))
     .map(it => it.getAsFile());
   if (files.length > 0) handleAiScanFiles(files);
+});
+
+// ── 통합 붙여넣기 AI 모드 (여러 장 = 여러 품목일 수 있으니, 한 장씩 따로 분석) ──
+async function handleBulkPasteAiFiles(files) {
+  const statusEl = document.getElementById("bulkPasteAiStatus");
+  const imageFiles = Array.from(files).filter(f => f.type === "image/png" || f.type === "image/jpeg");
+  if (imageFiles.length === 0) { statusEl.textContent = "PNG 또는 JPG 이미지를 올려주세요."; return; }
+
+  const newLines = [];
+  let failCount = 0;
+  for (let i = 0; i < imageFiles.length; i++) {
+    statusEl.textContent = "분석 중... (" + (i + 1) + "/" + imageFiles.length + "장)";
+    try {
+      const b64 = await fileToBase64(imageFiles[i]);
+      const res = await fetch("/scan-trade-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images: [{ mimeType: imageFiles[i].type, data: b64 }] }),
+      });
+      const json = await res.json();
+      if (!json.ok) { failCount++; continue; }
+      const data = json.data || {};
+      const itemName = (data.itemName || "").trim();
+      const rows = data.rows || [];
+      if (!itemName || rows.length === 0) { failCount++; continue; }
+      rows.forEach(r => {
+        if (!r.city || !r.price) return;
+        newLines.push(itemName + "," + r.city + "," + (r.marketRate != null ? r.marketRate : 100) + "," + r.price);
+      });
+    } catch (e) {
+      failCount++;
+    }
+  }
+
+  const textarea = document.getElementById("bulkPasteTextarea");
+  const existing = textarea.value.trim();
+  textarea.value = (existing ? existing + "\n" : "") + newLines.join("\n");
+
+  let msg = newLines.length + "줄 채워짐 (" + imageFiles.length + "장 분석)";
+  if (failCount > 0) msg += ", " + failCount + "장은 인식 실패";
+  msg += " — 아래에서 확인 후 '일괄 등록'을 눌러주세요.";
+  statusEl.textContent = msg;
+}
+
+document.getElementById("bulkPasteAiDropzone").addEventListener("click", () => {
+  document.getElementById("bulkPasteAiFileInput").click();
+});
+document.getElementById("bulkPasteAiFileInput").addEventListener("change", (e) => {
+  if (e.target.files.length > 0) handleBulkPasteAiFiles(e.target.files);
+  e.target.value = "";
+});
+document.getElementById("bulkPasteAiDropzone").addEventListener("dragover", (e) => {
+  e.preventDefault();
+  e.currentTarget.style.background = "#2a2e34";
+});
+document.getElementById("bulkPasteAiDropzone").addEventListener("dragleave", (e) => {
+  e.currentTarget.style.background = "var(--card)";
+});
+document.getElementById("bulkPasteAiDropzone").addEventListener("drop", (e) => {
+  e.preventDefault();
+  e.currentTarget.style.background = "var(--card)";
+  if (e.dataTransfer.files.length > 0) handleBulkPasteAiFiles(e.dataTransfer.files);
+});
+window.addEventListener("paste", (e) => {
+  const panel = document.getElementById("bulkPastePanel");
+  if (panel.style.display !== "block") return;
+  const files = Array.from(e.clipboardData.items)
+    .filter(it => it.type.startsWith("image/"))
+    .map(it => it.getAsFile());
+  if (files.length > 0) handleBulkPasteAiFiles(files);
 });
 
 function attachAutocompleteEnter(input, datalistId, submitFn) {
