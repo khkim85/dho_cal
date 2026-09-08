@@ -199,7 +199,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-08-04</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-08-05</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -217,7 +217,14 @@
   <button id="loadBtn">불러오기</button>
   <input type="file" id="loadFile" accept="application/json" style="display:none;">
   <button id="resetAll">전체 초기화</button>
+  <button id="checkInvalidCitiesBtn">🔍 잘못된 도시명 검사</button>
   <span id="remoteStatus" style="font-size:12px;"></span>
+</div>
+
+<div class="panel" id="invalidCitiesPanel" style="display:none;">
+  <h2>잘못된 도시명 목록</h2>
+  <p class="hint">224개 도시 목록에 없는 이름으로 등록된 판매 기록입니다. 오타이거나 존재하지 않는 도시일 수 있습니다.</p>
+  <div id="invalidCitiesList"></div>
 </div>
 
 <div class="panel" id="bulkPastePanel" style="display:none;">
@@ -1462,6 +1469,7 @@ function makeItemCard(item) {
     const marketBonus = marketRaw !== "" ? Number(marketRaw) : 100;
     const note = addRow.querySelector(".sale-note-input").value.trim();
     if (!city || !price) { alert("도시와 판매가를 입력해주세요."); return; }
+    if (!UWO_DATA.ALL_CITIES.includes(city)) { alert("'" + city + "'는 등록된 224개 도시 목록에 없는 이름입니다. 철자를 확인해주세요."); return; }
     if (!item.sales) item.sales = [];
     item.sales.push({ id: nextSaleId++, city, price, marketBonus, note });
     hasUnsavedChanges = true;
@@ -1494,16 +1502,21 @@ function makeItemCard(item) {
     if (lines.length === 0) { alert("등록할 줄이 없습니다."); return; }
     if (!item.sales) item.sales = [];
     let added = 0;
+    const invalidCities = [];
     lines.forEach(line => {
       const parts = line.split(/\t|,/).map(s => s.trim());
       const city = parts[0];
       const marketBonus = (parts[1] !== undefined && parts[1] !== "") ? Number(parts[1]) : 100;
       const price = Number(parts[2]);
       if (!city || !price) return;
+      if (!UWO_DATA.ALL_CITIES.includes(city)) { invalidCities.push(city); return; }
       item.sales.push({ id: nextSaleId++, city, price, marketBonus, note: "" });
       added++;
     });
-    if (added === 0) { alert("형식에 맞는 줄이 없습니다. '도시명,시세%,가격' 형식을 확인해주세요."); return; }
+    if (added === 0 && invalidCities.length === 0) { alert("형식에 맞는 줄이 없습니다. '도시명,시세%,가격' 형식을 확인해주세요."); return; }
+    if (invalidCities.length > 0) {
+      alert(invalidCities.length + "개 줄은 알 수 없는 도시명이라 제외했습니다: " + invalidCities.join(", "));
+    }
     bulkBox.querySelector(".bulk-text-input").value = "";
     hasUnsavedChanges = true;
     renderList();
@@ -1624,6 +1637,7 @@ document.getElementById("bulkPasteSubmitBtn").addEventListener("click", () => {
   // 품목명별로 묶기
   const groups = {}; // { 품목명: [{city, marketRate, price}] }
   let malformed = 0;
+  const invalidCityLines = [];
   lines.forEach(line => {
     let parts;
     if (line.includes("\t")) {
@@ -1643,6 +1657,7 @@ document.getElementById("bulkPasteSubmitBtn").addEventListener("click", () => {
     const price = Number(String(priceRaw).replace(/[^0-9.-]/g, ""));
     const marketRate = marketRateRaw !== "" ? Number(marketRateRaw) : 100;
     if (!name || !city || !price) { malformed++; return; }
+    if (!UWO_DATA.ALL_CITIES.includes(city)) { invalidCityLines.push(line); return; }
     if (!groups[name]) groups[name] = [];
     groups[name].push({ city, marketRate, price });
   });
@@ -1679,6 +1694,7 @@ document.getElementById("bulkPasteSubmitBtn").addEventListener("click", () => {
   if (newItemsCreated > 0) msg += ", 신규 품목 " + newItemsCreated + "개 생성(" + newItemNames.join(", ") + " — 구분/분류/획득처는 '수정'으로 채워주세요)";
   if (updatedItems > 0) msg += ", 기존 품목 " + updatedItems + "개에 반영";
   if (malformed > 0) msg += ". 형식이 안 맞아 건너뛴 줄 " + malformed + "개";
+  if (invalidCityLines.length > 0) msg += ". 알 수 없는 도시명이라 제외된 줄 " + invalidCityLines.length + "개: " + invalidCityLines.join(" / ");
   statusEl.textContent = msg;
   document.getElementById("bulkPasteTextarea").value = "";
 });
@@ -1999,6 +2015,66 @@ document.getElementById("resetAll").addEventListener("click", () => {
   nextSaleId = 1;
   hasUnsavedChanges = false;
   render();
+});
+
+// ── 잘못된 도시명(224개 목록에 없는 이름) 검사/삭제 ──
+function renderInvalidCities() {
+  const panel = document.getElementById("invalidCitiesPanel");
+  const list = document.getElementById("invalidCitiesList");
+  const found = []; // {itemId, itemName, saleId, city, price}
+  items.forEach(item => {
+    (item.sales || []).forEach(s => {
+      if (!UWO_DATA.ALL_CITIES.includes(s.city)) {
+        found.push({ itemId: item.id, itemName: item.name, saleId: s.id, city: s.city, price: s.price });
+      }
+    });
+  });
+  panel.style.display = "block";
+  if (found.length === 0) {
+    list.innerHTML = "<div class='empty-hint'>잘못된 도시명이 없습니다.</div>";
+    return;
+  }
+  list.innerHTML =
+    "<div class='row' style='margin-bottom:8px;'><button class='small danger' id='deleteAllInvalidBtn'>전체 삭제 (" + found.length + "건)</button></div>" +
+    "<table class='sales-table'><tr><th>교역품</th><th>도시명(오류)</th><th>판매가</th><th></th></tr>" +
+    found.map(f =>
+      "<tr><td>" + f.itemName + "</td><td>" + f.city + "</td><td>" + f.price.toLocaleString() + "</td>" +
+      "<td><button class='small danger invalid-del-btn' data-item-id='" + f.itemId + "' data-sale-id='" + f.saleId + "'>삭제</button></td></tr>"
+    ).join("") + "</table>";
+
+  list.querySelectorAll(".invalid-del-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const itemId = Number(btn.dataset.itemId);
+      const saleId = Number(btn.dataset.saleId);
+      const item = items.find(i => i.id === itemId);
+      if (item) item.sales = item.sales.filter(s => s.id !== saleId);
+      hasUnsavedChanges = true;
+      saveToLocalStorage();
+      scheduleRemoteSave();
+      renderList();
+      renderInvalidCities();
+    });
+  });
+  const deleteAllBtn = document.getElementById("deleteAllInvalidBtn");
+  if (deleteAllBtn) {
+    deleteAllBtn.addEventListener("click", () => {
+      if (!confirm(found.length + "건을 전부 삭제할까요?")) return;
+      found.forEach(f => {
+        const item = items.find(i => i.id === f.itemId);
+        if (item) item.sales = item.sales.filter(s => s.id !== f.saleId);
+      });
+      hasUnsavedChanges = true;
+      saveToLocalStorage();
+      scheduleRemoteSave();
+      renderList();
+      renderInvalidCities();
+    });
+  }
+}
+document.getElementById("checkInvalidCitiesBtn").addEventListener("click", () => {
+  const panel = document.getElementById("invalidCitiesPanel");
+  if (panel.style.display === "block") { panel.style.display = "none"; return; }
+  renderInvalidCities();
 });
 
 // ── 원격 저장 (구글시트 + Apps Script 웹앱) ──────────
