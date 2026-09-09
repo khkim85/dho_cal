@@ -45,26 +45,36 @@
   .status-dot.live { background: #7ec996; box-shadow: 0 0 6px #7ec996; }
   .status-dot.busy { background: var(--accent); }
 
-  .capture-area { position: relative; display: inline-block; max-width: 100%; }
-  video { display: block; max-width: 100%; border-radius: 8px; border: 1px solid var(--border-strong); }
+  .capture-area { position: relative; display: inline-block; max-width: 480px; }
+  video { display: block; width: 100%; max-width: 480px; border-radius: 8px; border: 1px solid var(--border-strong); }
   #selectionBox {
     position: absolute; border: 2px solid var(--accent); background: rgba(217,154,91,0.15);
     display: none; cursor: move; box-sizing: border-box;
   }
   .region-hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
 
-  .log-list { max-height: 420px; overflow-y: auto; display: flex; flex-direction: column-reverse; gap: 8px; }
+  .log-list { max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
   .log-entry { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--card); }
   .log-time { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-bottom: 4px; }
   .log-text { font-size: 13px; white-space: pre-wrap; word-break: break-word; }
   .log-text.unchanged { color: var(--text-muted); }
   .log-text.empty { color: var(--text-muted); font-style: italic; }
+
+  #toast {
+    position: fixed; top: 20px; right: 20px; background: var(--card); border: 1px solid var(--accent);
+    color: var(--text); padding: 8px 14px; border-radius: 6px; font-size: 13px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    opacity: 0; transform: translateY(-8px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 999;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
 </style>
 </head>
 <body>
 
 <h1>화면 감시 — 텍스트 지속 읽기</h1>
 <p class="sub">화면(창/탭)의 특정 영역을 골라서, 일정 주기마다 그 안의 텍스트를 AI로 읽어 기록합니다.</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-08-01</p>
+
+<div id="toast"></div>
 
 <div class="panel">
   <p class="hint">
@@ -129,8 +139,8 @@
   <div class="row" style="justify-content:space-between;">
     <h2 style="font-size:15px; margin:0;">읽은 텍스트 기록</h2>
     <div>
-      <button id="clearLogBtn">기록 지우기</button>
       <button id="copyLogBtn">전체 복사</button>
+      <button id="clearLogBtn">기록 지우기</button>
     </div>
   </div>
   <div id="logList" class="log-list">
@@ -153,6 +163,14 @@ const statusLabel = document.getElementById("statusLabel");
 
 function setStatus(kind, label) {
   statusLabel.innerHTML = "<span class='status-dot " + kind + "'></span>" + label;
+}
+
+function showToast(msg) {
+  const toast = document.getElementById("toast");
+  toast.textContent = msg;
+  toast.classList.add("show");
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => toast.classList.remove("show"), 1800);
 }
 
 // ── 화면 공유 시작/중지 ──────────────────────────────
@@ -260,8 +278,11 @@ function renderLog() {
     list.innerHTML = "<div class='log-entry'><div class='log-text empty'>아직 기록이 없습니다.</div></div>";
     return;
   }
-  list.innerHTML = logEntries.map((e, idx) => {
-    const isUnchanged = idx > 0 && logEntries[idx - 1].text === e.text;
+  const reversed = logEntries.slice().reverse(); // 최신이 맨 위로 오도록
+  list.innerHTML = reversed.map((e, idx) => {
+    // reversed 배열 기준으로 idx+1(시간상 바로 이전 항목)과 비교
+    const prev = reversed[idx + 1];
+    const isUnchanged = prev && prev.text === e.text;
     const isEmpty = e.text.trim() === "";
     const cls = isEmpty ? "empty" : (isUnchanged ? "unchanged" : "");
     const display = isEmpty ? "(텍스트 없음)" : (isUnchanged ? "(변화 없음)" : e.text);
@@ -314,6 +335,7 @@ document.getElementById("modeSelect").addEventListener("change", () => {
 async function scanOnce() {
   const captured = captureSelectionAsBase64();
   if (!captured) return;
+  showToast("📸 캡처됨 — 읽는 중...");
   const mode = getMode();
   setStatus("busy", "읽는 중...");
   try {
