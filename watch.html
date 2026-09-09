@@ -149,7 +149,36 @@ let watchTimer = null;
 let selection = null; // {x, y, w, h} — video 요소 기준 좌표(픽셀, 표시 크기 기준)
 let dragStart = null;
 let lastText = "";
-const logEntries = []; // {time, text}
+let logEntries = []; // {time, text}
+
+const LS_KEY = "watchTool_v1";
+function saveToLocalStorage() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      // 썸네일(base64 이미지)은 용량이 커서 저장에서 제외 — 새로고침하면 썸네일만 없어지고 텍스트 기록은 남는다.
+      logEntries: logEntries.slice(-200).map(e => ({ time: e.time, text: e.text })),
+      accumulatedRows, accumulatedFields,
+      fields: document.getElementById("fieldsInput").value,
+      extraInstruction: document.getElementById("extraInstructionInput").value,
+      mode: document.getElementById("modeSelect").value,
+      interval: document.getElementById("intervalSelect").value,
+    }));
+  } catch (e) { /* 저장 실패해도 조용히 무시 (기능엔 지장 없음) */ }
+}
+function loadFromLocalStorage() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    logEntries = data.logEntries || [];
+    accumulatedRows = data.accumulatedRows || [];
+    accumulatedFields = data.accumulatedFields || [];
+    if (data.fields != null) document.getElementById("fieldsInput").value = data.fields;
+    if (data.extraInstruction != null) document.getElementById("extraInstructionInput").value = data.extraInstruction;
+    if (data.mode != null) document.getElementById("modeSelect").value = data.mode;
+    if (data.interval != null) document.getElementById("intervalSelect").value = data.interval;
+  } catch (e) { /* 복원 실패해도 빈 상태로 시작 */ }
+}
 
 const video = document.getElementById("video");
 const selectionBox = document.getElementById("selectionBox");
@@ -265,6 +294,7 @@ function addLogEntry(text, thumbDataUrl) {
   const timeStr = String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0") + ":" + String(now.getSeconds()).padStart(2,"0");
   logEntries.push({ time: timeStr, text, thumb: thumbDataUrl });
   renderLog();
+  saveToLocalStorage();
 }
 
 function renderLog() {
@@ -313,6 +343,7 @@ function renderAccumulatedTable() {
 document.getElementById("clearAccumulatedBtn").addEventListener("click", () => {
   accumulatedRows = [];
   renderAccumulatedTable();
+  saveToLocalStorage();
 });
 document.getElementById("copyAccumulatedCsvBtn").addEventListener("click", () => {
   const csvBox = document.getElementById("accumulatedCsv");
@@ -408,6 +439,7 @@ document.getElementById("stopWatchBtn").addEventListener("click", stopWatching);
 document.getElementById("clearLogBtn").addEventListener("click", () => {
   logEntries.length = 0;
   renderLog();
+  saveToLocalStorage();
 });
 document.getElementById("copyLogBtn").addEventListener("click", () => {
   const text = logEntries.map(e => "[" + e.time + "] " + e.text).join("\n\n");
@@ -415,6 +447,12 @@ document.getElementById("copyLogBtn").addEventListener("click", () => {
     alert("전체 기록을 클립보드에 복사했습니다.");
   });
 });
+
+// ── 페이지 로드 시 이전 기록/설정 복원 ──────────────
+loadFromLocalStorage();
+renderLog();
+renderAccumulatedTable();
+document.getElementById("modeSelect").dispatchEvent(new Event("change")); // 입력칸 표시 상태도 복원된 모드에 맞춤
 </script>
 </body>
 </html>
