@@ -88,12 +88,7 @@
     <button id="stopShareBtn" disabled>화면 공유 중지</button>
     <span style="width:1px; background:var(--border-strong); align-self:stretch;"></span>
     <label style="font-size:13px;">주기:
-      <select id="intervalSelect">
-        <option value="5">5초</option>
-        <option value="10" selected>10초</option>
-        <option value="30">30초</option>
-        <option value="60">1분</option>
-      </select>
+      <input type="number" id="intervalSelect" value="10" min="1" step="1" style="width:60px;">초
     </label>
     <button class="primary" id="startWatchBtn" disabled>▶ 감시 시작</button>
     <button class="danger" id="stopWatchBtn" disabled>■ 감시 중지</button>
@@ -398,6 +393,10 @@ document.getElementById("startWatchBtn").addEventListener("click", () => {
     return;
   }
   const seconds = Number(document.getElementById("intervalSelect").value);
+  if (!seconds || seconds < 1) {
+    alert("주기는 1초 이상의 숫자로 입력해주세요.");
+    return;
+  }
   scanOnce();
   watchTimer = setInterval(scanOnce, seconds * 1000);
   document.getElementById("startWatchBtn").disabled = true;
