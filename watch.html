@@ -72,7 +72,7 @@
 
 <h1>화면 감시 — 텍스트 지속 읽기</h1>
 <p class="sub">화면(창/탭)의 특정 영역을 골라서, 일정 주기마다 그 안의 텍스트를 AI로 읽어 기록합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-08-01</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-10-02</p>
 
 <div id="toast"></div>
 
@@ -102,8 +102,16 @@
         <option value="structured" selected>구조화 항목 추출 (표)</option>
       </select>
     </label>
+    <label style="font-size:13px;">AI 모델:
+      <select id="modelSelect">
+        <option value="gemini-3.1-flash-lite" selected>Gemini 3.1 Flash Lite</option>
+        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+      </select>
+    </label>
     <input type="text" id="fieldsInput" placeholder="예: 품목명,도시명" value="품목명,도시명,시세,전체판매가" style="flex:1; min-width:200px;">
   </div>
+  <p class="hint">한 모델이 요청 한도(429)에 걸리면, 다른 모델로 바꿔서 계속 스캔할 수 있습니다 — 모델마다 한도가 별도로 집계됩니다.</p>
   <p class="hint" id="structuredHint">화면에 반복되는 항목에서 뽑아낼 필드명을 콤마로 구분해서 입력하세요 (예: "품목명,도시명"). 스캔할 때마다 그 항목들로 표를 만들어서 보여주고, 아래에 누적 표도 같이 쌓입니다.</p>
   <div class="row" id="extraInstructionRow">
     <input type="text" id="extraInstructionInput" placeholder="추가 지시사항 (선택) — 예: 왼쪽 목록에서 강조/선택된 항목 하나만 대상으로 하고, 오른쪽 표 전체를 그 하나에 매칭해라" value='왼쪽 목록에서 노랗게 강조된 항목 하나만 대상으로 하고 오른쪽 표 전체를 그 하나에 매칭, 시세에 "%" 제거, 전체판매가에 "," 제거' style="flex:1;">
@@ -161,6 +169,7 @@ function saveToLocalStorage() {
       fields: document.getElementById("fieldsInput").value,
       extraInstruction: document.getElementById("extraInstructionInput").value,
       mode: document.getElementById("modeSelect").value,
+      model: document.getElementById("modelSelect").value,
       interval: document.getElementById("intervalSelect").value,
     }));
   } catch (e) { /* 저장 실패해도 조용히 무시 (기능엔 지장 없음) */ }
@@ -176,6 +185,7 @@ function loadFromLocalStorage() {
     if (data.fields != null) document.getElementById("fieldsInput").value = data.fields;
     if (data.extraInstruction != null) document.getElementById("extraInstructionInput").value = data.extraInstruction;
     if (data.mode != null) document.getElementById("modeSelect").value = data.mode;
+    if (data.model != null) document.getElementById("modelSelect").value = data.model;
     if (data.interval != null) document.getElementById("intervalSelect").value = data.interval;
   } catch (e) { /* 복원 실패해도 빈 상태로 시작 */ }
 }
@@ -365,7 +375,7 @@ async function scanOnce() {
   const mode = getMode();
   setStatus("busy", "읽는 중...");
   try {
-    const body = { image: { mimeType: "image/png", data: captured.base64 }, mode };
+    const body = { image: { mimeType: "image/png", data: captured.base64 }, mode, model: document.getElementById("modelSelect").value };
     if (mode === "structured") {
       body.fields = getFields();
       const extra = document.getElementById("extraInstructionInput").value.trim();

@@ -12,7 +12,12 @@ function jsonResponse(obj, status) {
   });
 }
 
-const MODEL = "gemini-3.1-flash-lite";
+const DEFAULT_MODEL = "gemini-3.1-flash-lite";
+const ALLOWED_MODELS = [
+  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-flash",
+];
 
 const TEXT_PROMPT = `이 이미지에 보이는 텍스트를 전부, 화면에 배치된 순서(위에서 아래, 왼쪽에서 오른쪽)대로 있는 그대로 읽어서 돌려줘.
 설명이나 해석을 덧붙이지 말고, 보이는 텍스트만 줄바꿈으로 구분해서 답해라. 텍스트가 전혀 없으면 빈 문자열로 답해라.`;
@@ -60,6 +65,8 @@ export async function onRequestPost(context) {
   const prompt = mode === "structured" ? buildStructuredPrompt(fields, payload.extraInstruction) : TEXT_PROMPT;
   const generationConfig = mode === "structured" ? { response_mime_type: "application/json" } : undefined;
 
+  const model = ALLOWED_MODELS.includes(payload.model) ? payload.model : DEFAULT_MODEL;
+
   try {
     const body = {
       contents: [{
@@ -72,7 +79,7 @@ export async function onRequestPost(context) {
     if (generationConfig) body.generationConfig = generationConfig;
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,7 +97,7 @@ export async function onRequestPost(context) {
 
     if (text == null) {
       const apiError = json.error ? (json.error.message || JSON.stringify(json.error)) : null;
-      return jsonResponse({ ok: false, error: apiError ? "Gemini API 오류: " + apiError : "AI 응답을 이해하지 못했습니다." }, 502);
+      return jsonResponse({ ok: false, error: apiError ? `Gemini API 오류(${model}): ` + apiError : "AI 응답을 이해하지 못했습니다." }, 502);
     }
 
     if (mode === "structured") {
