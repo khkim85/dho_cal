@@ -15,8 +15,8 @@ function jsonResponse(obj, status) {
 const DEFAULT_MODEL = "gemini-3.1-flash-lite";
 const ALLOWED_MODELS = [
   "gemini-3.1-flash-lite",
-  "gemini-2.5-flash-lite",
-  "gemini-2.5-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.6-flash",
 ];
 
 const TEXT_PROMPT = `이 이미지에 보이는 텍스트를 전부, 화면에 배치된 순서(위에서 아래, 왼쪽에서 오른쪽)대로 있는 그대로 읽어서 돌려줘.
