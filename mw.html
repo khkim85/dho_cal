@@ -194,6 +194,7 @@
   .collection-table tr.done .collection-name { text-decoration: line-through; color: var(--text-muted); }
   .craft-city-chip { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
 </style>
+<script src="/usage-log.js"></script>
 </head>
 <body>
 
@@ -840,6 +841,7 @@ async function handleBoostScanFiles(files) {
   statusEl.textContent = '이미지 분석 중... (' + imageFiles.length + '장)';
   try {
     const images = await Promise.all(imageFiles.map(async (f) => ({ mimeType: f.type, data: await fileToBase64(f) })));
+    logApiUsage('gemini-3.1-flash-lite');
     const res = await fetch('/scan-boost-schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1728,6 +1730,7 @@ async function handleAiScanFiles(files) {
       data: await fileToBase64(f),
     })));
 
+    logApiUsage("gemini-3.1-flash-lite");
     const res = await fetch("/scan-trade-image", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1817,6 +1820,7 @@ async function handleBulkPasteAiFiles(files) {
     statusEl.textContent = "분석 중... (" + (i + 1) + "/" + imageFiles.length + "장)";
     try {
       const b64 = await fileToBase64(imageFiles[i]);
+      logApiUsage("gemini-3.1-flash-lite");
       const res = await fetch("/scan-trade-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -67,6 +67,7 @@
   }
   #toast.show { opacity: 1; transform: translateY(0); }
 </style>
+<script src="/usage-log.js"></script>
 </head>
 <body>
 
@@ -381,6 +382,7 @@ async function scanOnce() {
       const extra = document.getElementById("extraInstructionInput").value.trim();
       if (extra) body.extraInstruction = extra;
     }
+    logApiUsage(body.model);
 
     const res = await fetch("/scan-text", {
       method: "POST",
