@@ -53,8 +53,8 @@
   }
   .region-hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
 
-  .log-list { max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-  .log-entry { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--card); }
+  .log-list { max-height: 640px; overflow-y: auto; display: flex; flex-direction: row; flex-wrap: wrap; align-content: flex-start; gap: 8px; }
+  .log-entry { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--card); width: 300px; flex: 0 0 auto; }
   .log-time { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-bottom: 4px; }
   .log-text { font-size: 13px; white-space: pre-wrap; word-break: break-word; }
   .log-text.unchanged { color: var(--text-muted); }
@@ -73,7 +73,7 @@
 
 <h1>화면 감시 — 텍스트 지속 읽기</h1>
 <p class="sub">화면(창/탭)의 특정 영역을 골라서, 일정 주기마다 그 안의 텍스트를 AI로 읽어 기록합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-10-02</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-10-03</p>
 
 <div id="toast"></div>
 
@@ -322,7 +322,7 @@ function renderLog() {
     const isEmpty = e.text.trim() === "";
     const cls = isEmpty ? "empty" : (isUnchanged ? "unchanged" : "");
     const display = isEmpty ? "(텍스트 없음)" : (isUnchanged ? "(변화 없음)" : e.text);
-    const thumbHtml = e.thumb ? "<img src='" + e.thumb + "' style='max-width:220px; max-height:120px; border:1px solid var(--border-strong); border-radius:4px; display:block; margin-top:6px;'>" : "";
+    const thumbHtml = e.thumb ? "<img src='" + e.thumb + "' style='max-width:280px; max-height:180px; border:1px solid var(--border-strong); border-radius:4px; display:block; margin-top:6px;'>" : "";
     return "<div class='log-entry'><div class='log-time'>" + e.time + "</div><div class='log-text " + cls + "'>" + display.replace(/</g,"&lt;") + "</div>" + thumbHtml + "</div>";
   }).join("");
 }
