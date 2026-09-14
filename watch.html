@@ -73,7 +73,7 @@
 
 <h1>화면 감시 — 텍스트 지속 읽기</h1>
 <p class="sub">화면(창/탭)의 특정 영역을 골라서, 일정 주기마다 그 안의 텍스트를 AI로 읽어 기록합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-10-04</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-10-05</p>
 
 <div id="toast"></div>
 
@@ -81,17 +81,20 @@
   <p class="hint">
     1) "화면 공유 시작"을 누르고 감시할 창/화면을 선택하세요 (브라우저가 팝업으로 물어봅니다).<br>
     2) 미리보기 화면 위에서 <strong>마우스로 드래그</strong>해서 읽고 싶은 영역을 지정하세요.<br>
-    3) 주기를 고르고 "감시 시작"을 누르면, 그 영역만 잘라서 주기적으로 AI가 텍스트를 읽어 아래에 기록합니다.<br>
+    3-A) <strong>자동 모드</strong>: 주기를 고르고 "감시 시작"을 누르면, 그 영역만 잘라서 주기적으로 AI가 읽어 아래에 기록합니다.<br>
+    3-B) <strong>수동 모드</strong>: 감시를 켜지 않고, 원할 때마다 <strong>F9</strong> 키를 누르거나 "📸 수동 캡처" 버튼을 누르면 그 순간 딱 한 번만 캡처해서 읽습니다. 화면을 직접 스크롤한 뒤 원하는 타이밍에 F9를 누르는 식으로 쓰면 됩니다.<br>
     브라우저 보안 정책상 화면 공유는 매번 직접 눌러서 시작해야 하고, 공유 중에는 브라우저가 표시를 계속 띄웁니다.
   </p>
   <div class="row">
     <button class="primary" id="startShareBtn">🖥️ 화면 공유 시작</button>
     <button id="stopShareBtn" disabled>화면 공유 중지</button>
     <span style="width:1px; background:var(--border-strong); align-self:stretch;"></span>
+    <button id="manualCaptureBtn" disabled>📸 수동 캡처 (F9)</button>
+    <span style="width:1px; background:var(--border-strong); align-self:stretch;"></span>
     <label style="font-size:13px;">주기:
       <input type="number" id="intervalSelect" value="10" min="1" step="1" style="width:60px;">초
     </label>
-    <button class="primary" id="startWatchBtn" disabled>▶ 감시 시작</button>
+    <button class="primary" id="startWatchBtn" disabled>▶ 자동 감시 시작</button>
     <button class="danger" id="stopWatchBtn" disabled>■ 감시 중지</button>
     <span id="statusLabel" style="font-size:13px; margin-left:6px;"><span class="status-dot idle"></span>대기 중</span>
   </div>
@@ -231,6 +234,7 @@ function stopSharing() {
   document.getElementById("stopShareBtn").disabled = true;
   document.getElementById("startShareBtn").disabled = false;
   document.getElementById("startWatchBtn").disabled = true;
+  document.getElementById("manualCaptureBtn").disabled = true;
   stopWatching();
   document.getElementById("regionHint").textContent = "화면 공유가 중지되었습니다. 다시 시작하려면 위 버튼을 누르세요.";
 }
@@ -281,6 +285,7 @@ window.addEventListener("mouseup", () => {
       h: boxRect.height * scaleY,
     };
     document.getElementById("startWatchBtn").disabled = false;
+    document.getElementById("manualCaptureBtn").disabled = false;
     document.getElementById("regionHint").textContent = "영역 지정 완료 (" + Math.round(selection.w) + "×" + Math.round(selection.h) + "px). 다시 드래그하면 영역을 바꿀 수 있습니다.";
   }
   dragStart = null;
@@ -447,6 +452,26 @@ document.getElementById("startWatchBtn").addEventListener("click", () => {
   setStatus("live", "감시 중");
 });
 document.getElementById("stopWatchBtn").addEventListener("click", stopWatching);
+
+// ── 수동 캡처 (버튼 클릭 또는 F9) ──────────────────────
+function canManualCaptureNow() {
+  if (!selection) return false;
+  if (getMode() === "structured" && getFields().length === 0) {
+    alert("구조화 모드는 필드명을 최소 1개 입력해야 합니다 (예: 품목명,도시명).");
+    return false;
+  }
+  return true;
+}
+document.getElementById("manualCaptureBtn").addEventListener("click", () => {
+  if (canManualCaptureNow()) scanOnce();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "F9") return;
+  const tag = (document.activeElement && document.activeElement.tagName) || "";
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return; // 입력 중엔 무시
+  e.preventDefault();
+  if (canManualCaptureNow()) scanOnce();
+});
 
 document.getElementById("clearLogBtn").addEventListener("click", () => {
   logEntries.length = 0;
