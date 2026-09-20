@@ -200,7 +200,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-04</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-05</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -1107,17 +1107,17 @@ function renderList() {
 function saleBonuses(sale, item) {
   const regionBonus = getRegionBonus(sale.city, item.category, item.name);
   const seasonBonus = getSeasonBonus(sale.city, item.category);
-  const marketBonus = sale.marketBonus != null && sale.marketBonus !== "" ? sale.marketBonus : 100;
-  return { regionBonus, seasonBonus, marketBonus };
+  const marketRate = sale.marketRate != null && sale.marketRate !== "" ? sale.marketRate : 100;
+  return { regionBonus, seasonBonus, marketRate };
 }
 function baseSalePrice(sale, item) {
   const b = saleBonuses(sale, item);
-  return sale.price / (b.marketBonus / 100);
+  return sale.price / (b.marketRate / 100);
 }
 function itemIntrinsicValue(sale, item) {
   const b = saleBonuses(sale, item);
   const regionSeasonMultiplier = 1 + (b.regionBonus + b.seasonBonus) / 100;
-  const marketMultiplier = b.marketBonus / 100;
+  const marketMultiplier = b.marketRate / 100;
   return sale.price / (regionSeasonMultiplier * marketMultiplier);
 }
 
@@ -1136,7 +1136,7 @@ function saleColumnValue(col, s, item) {
     case "판매가": return s.price;
     case "지역 우대%": return b.regionBonus;
     case "시즌 우대%": return b.seasonBonus;
-    case "시세%": return b.marketBonus;
+    case "시세%": return b.marketRate;
     case "기준단가": return baseSalePrice(s, item);
     case "비고": return s.note || "";
     default: return "";
@@ -1370,7 +1370,7 @@ function makeItemCard(item) {
           "<td><input type='number' class='sale-edit-price' value='" + s.price + "' style='width:80px;'></td>" +
           "<td class='num'>" + b.regionBonus + "%</td>" +
           "<td class='num'>" + b.seasonBonus + "%</td>" +
-          "<td><input type='number' class='sale-edit-market' value='" + (s.marketBonus != null ? s.marketBonus : 100) + "' style='width:55px;'></td>" +
+          "<td><input type='number' class='sale-edit-market' value='" + (s.marketRate != null ? s.marketRate : 100) + "' style='width:55px;'></td>" +
           "<td class='num'>-</td>" +
           "<td><input type='text' class='sale-edit-note' value=\"" + (s.note || "").replace(/"/g, "&quot;") + "\" style='width:90px;'></td>" +
           "<td style='white-space:nowrap;'>" +
@@ -1386,7 +1386,7 @@ function makeItemCard(item) {
         "<td class='num'>" + s.price.toLocaleString() + "</td>" +
         "<td class='num'>" + b.regionBonus + "%</td>" +
         "<td class='num'>" + b.seasonBonus + "%</td>" +
-        "<td class='num'>" + b.marketBonus + "%</td>" +
+        "<td class='num'>" + b.marketRate + "%</td>" +
         "<td class='num'>" + Math.round(baseSalePrice(s, item)).toLocaleString() + "</td>" +
         "<td>" + (s.note || "") + "</td>" +
         "<td style='white-space:nowrap;'>" +
@@ -1449,13 +1449,13 @@ function makeItemCard(item) {
       const city = tr.querySelector(".sale-edit-city").value.trim();
       const price = Number(tr.querySelector(".sale-edit-price").value);
       const marketRaw = tr.querySelector(".sale-edit-market").value;
-      const marketBonus = marketRaw !== "" ? Number(marketRaw) : 100;
+      const marketRate = marketRaw !== "" ? Number(marketRaw) : 100;
       const note = tr.querySelector(".sale-edit-note").value.trim();
       if (!city || !price) { alert("도시와 판매가를 입력해주세요."); return; }
       const sale = item.sales.find(s => s.id === saleId);
       sale.city = city;
       sale.price = price;
-      sale.marketBonus = marketBonus;
+      sale.marketRate = marketRate;
       sale.note = note;
       hasUnsavedChanges = true;
       editingSaleId = null;
@@ -1483,12 +1483,12 @@ function makeItemCard(item) {
     const city = addRow.querySelector(".sale-city-input").value.trim();
     const price = Number(addRow.querySelector(".sale-price-input").value);
     const marketRaw = addRow.querySelector(".sale-market-input").value;
-    const marketBonus = marketRaw !== "" ? Number(marketRaw) : 100;
+    const marketRate = marketRaw !== "" ? Number(marketRaw) : 100;
     const note = addRow.querySelector(".sale-note-input").value.trim();
     if (!city || !price) { alert("도시와 판매가를 입력해주세요."); return; }
     if (!UWO_DATA.ALL_CITIES.includes(city)) { alert("'" + city + "'는 등록된 224개 도시 목록에 없는 이름입니다. 철자를 확인해주세요."); return; }
     if (!item.sales) item.sales = [];
-    item.sales.push({ id: nextSaleId++, city, price, marketBonus, note });
+    item.sales.push({ id: nextSaleId++, city, price, marketRate, note });
     hasUnsavedChanges = true;
     renderList();
   });
@@ -1523,11 +1523,11 @@ function makeItemCard(item) {
     lines.forEach(line => {
       const parts = line.split(/\t|,/).map(s => s.trim());
       const city = parts[0];
-      const marketBonus = (parts[1] !== undefined && parts[1] !== "") ? Number(parts[1]) : 100;
+      const marketRate = (parts[1] !== undefined && parts[1] !== "") ? Number(parts[1]) : 100;
       const price = Number(parts[2]);
       if (!city || !price) return;
       if (!UWO_DATA.ALL_CITIES.includes(city)) { invalidCities.push(city); return; }
-      item.sales.push({ id: nextSaleId++, city, price, marketBonus, note: "" });
+      item.sales.push({ id: nextSaleId++, city, price, marketRate, note: "" });
       added++;
     });
     if (added === 0 && invalidCities.length === 0) { alert("형식에 맞는 줄이 없습니다. '도시명,시세%,가격' 형식을 확인해주세요."); return; }
@@ -1680,31 +1680,18 @@ document.getElementById("bulkPasteSubmitBtn").addEventListener("click", () => {
   });
 
   // 붙여넣은 텍스트 자체 안에서도 같은 품목+같은 도시가 여러 줄일 수 있으므로,
-  // 아래 병합 단계 전에 먼저 도시별로 하나만 남긴다 (marketBonus가 100에 더 가까운 쪽, 동률이면 더 큰 쪽).
-  function pickBetterOfTwo(a, b) {
-    const aDist = Math.abs(Number(a.marketRate) - 100);
-    const bDist = Math.abs(Number(b.marketRate) - 100);
-    if (aDist !== bDist) return aDist < bDist ? a : b;
-    return Number(a.marketRate) >= Number(b.marketRate) ? a : b;
-  }
+  // 이 경우도 그냥 첫 줄만 남기고 나머지는 중복으로 버린다(비교하지 않음).
   Object.keys(groups).forEach(name => {
-    const byCity = {};
-    groups[name].forEach(row => {
-      byCity[row.city] = byCity[row.city] ? pickBetterOfTwo(byCity[row.city], row) : row;
+    const seenCities = new Set();
+    groups[name] = groups[name].filter(row => {
+      if (seenCities.has(row.city)) return false;
+      seenCities.add(row.city);
+      return true;
     });
-    groups[name] = Object.values(byCity);
   });
 
-  let addedSales = 0, skippedDup = 0, updatedSales = 0, newItemsCreated = 0, updatedItems = 0;
+  let addedSales = 0, skippedDup = 0, newItemsCreated = 0, updatedItems = 0;
   const newItemNames = [];
-
-  // marketBonus가 100에 더 가까운 쪽을 "더 나은 시세"로 본다. 동률이면 더 큰 쪽을 남긴다.
-  function isBetterRow(candidate, existing) {
-    const cDist = Math.abs(Number(candidate.marketRate) - 100);
-    const eDist = Math.abs(Number(existing.marketBonus) - 100);
-    if (cDist !== eDist) return cDist < eDist;
-    return Number(candidate.marketRate) > Number(existing.marketBonus);
-  }
 
   Object.keys(groups).forEach(name => {
     let item = items.find(i => i.name.trim().toLowerCase() === name.toLowerCase());
@@ -1718,19 +1705,10 @@ document.getElementById("bulkPasteSubmitBtn").addEventListener("click", () => {
     }
     if (!item.sales) item.sales = [];
     groups[name].forEach(row => {
-      // 중복 기준: 같은 품목 + 같은 도시 (가격/시세는 무관)
-      const existing = item.sales.find(s => s.city === row.city);
-      if (existing) {
-        if (isBetterRow(row, existing)) {
-          existing.price = row.price;
-          existing.marketBonus = row.marketRate;
-          updatedSales++;
-        } else {
-          skippedDup++;
-        }
-        return;
-      }
-      item.sales.push({ id: nextSaleId++, city: row.city, price: row.price, marketBonus: row.marketRate, note: "" });
+      // 중복 기준: 같은 품목 + 같은 도시. 비교 없이 이미 있으면 그냥 거부.
+      const isDup = item.sales.some(s => s.city === row.city);
+      if (isDup) { skippedDup++; return; }
+      item.sales.push({ id: nextSaleId++, city: row.city, price: row.price, marketRate: row.marketRate, note: "" });
       addedSales++;
     });
   });
@@ -1741,7 +1719,6 @@ document.getElementById("bulkPasteSubmitBtn").addEventListener("click", () => {
   render();
 
   let msg = addedSales + "건 추가";
-  if (updatedSales > 0) msg += ", " + updatedSales + "건 갱신(더 나은 시세로 교체)";
   if (skippedDup > 0) msg += ", 중복 " + skippedDup + "건 제외(기존 값 유지)";
   if (newItemsCreated > 0) msg += ", 신규 품목 " + newItemsCreated + "개 생성(" + newItemNames.join(", ") + " — 구분/분류/획득처는 '수정'으로 채워주세요)";
   if (updatedItems > 0) msg += ", 기존 품목 " + updatedItems + "개에 반영";
@@ -2191,7 +2168,7 @@ function rowsToItems(rows) {
         id: saleId,
         city: r.city,
         price: r.price != null ? Number(r.price) : null,
-        marketBonus: r.marketBonus != null ? Number(r.marketBonus) : 100,
+        marketRate: r.marketRate != null ? Number(r.marketRate) : 100,
         note: r.note || "",
       });
     }
@@ -2207,7 +2184,7 @@ function itemsToRows(items) {
       rows.push({
         itemId: item.id, itemName: item.name, source: item.source,
         category: item.category, origin: item.origin,
-        saleId: null, city: null, price: null, marketBonus: null, note: null,
+        saleId: null, city: null, price: null, marketRate: null, note: null,
       });
     } else {
       item.sales.forEach(s => {
@@ -2216,7 +2193,7 @@ function itemsToRows(items) {
           category: item.category, origin: item.origin,
           saleId: String(s.id), city: s.city,
           price: s.price != null ? String(s.price) : null,
-          marketBonus: s.marketBonus != null ? String(s.marketBonus) : null,
+          marketRate: s.marketRate != null ? String(s.marketRate) : null,
           note: s.note || null,
         });
       });
