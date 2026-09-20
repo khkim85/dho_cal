@@ -200,7 +200,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-01</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-02</p>
 
 <div class="main-tabs">
   <button class="main-tab-btn active" id="tabBtnPrice">판매가격</button>
@@ -2228,22 +2228,22 @@ async function saveItemsToSupabase() {
 
 async function loadFromRemote() {
   setRemoteStatusUI("loading");
-  let itemsOk = false;
-  let restOk = false;
-  try {
-    const { items: loadedItems, maxItemId, maxSaleId } = await loadItemsFromSupabase();
-    items = loadedItems;
-    nextItemId = maxItemId + 1;
-    nextSaleId = maxSaleId + 1;
-    itemsOk = true;
-  } catch (e) {
-    // Supabase 실패 시 items는 비워두지 않고 그대로 둠 (호출부에서 로컬 백업으로 대체)
-  }
-  try {
-    const url = REMOTE_WEBAPP_URL + "?key=" + encodeURIComponent(REMOTE_WRITE_KEY);
-    const res = await fetch(url);
-    const json = await res.json();
-    if (json.ok) {
+
+  const itemsPromise = loadItemsFromSupabase()
+    .then(({ items: loadedItems, maxItemId, maxSaleId }) => {
+      items = loadedItems;
+      nextItemId = maxItemId + 1;
+      nextSaleId = maxSaleId + 1;
+      return true;
+    })
+    .catch(() => false); // Supabase 실패 시 items는 비워두지 않고 그대로 둠 (호출부에서 로컬 백업으로 대체)
+
+  const restPromise = (async () => {
+    try {
+      const url = REMOTE_WEBAPP_URL + "?key=" + encodeURIComponent(REMOTE_WRITE_KEY);
+      const res = await fetch(url);
+      const json = await res.json();
+      if (!json.ok) return false;
       const data = json.data || {};
       boosts = data.boosts || [];
       nextBoostId = data.nextBoostId || (boosts.length + 1);
@@ -2254,38 +2254,41 @@ async function loadFromRemote() {
       nextCraftMaterialId = data.nextCraftMaterialId || CRAFT_MATERIAL_SEED.nextId;
       collectionItems = data.collectionItems && data.collectionItems.length > 0 ? data.collectionItems : COLLECTION_SEED.entries.map(e => ({...e}));
       nextCollectionItemId = data.nextCollectionItemId || COLLECTION_SEED.nextId;
-      restOk = true;
+      return true;
+    } catch (e) {
+      return false;
     }
-  } catch (e) {
-    // 아래에서 공통 처리
-  }
+  })();
+
+  // 두 백엔드는 서로 의존관계가 없으므로 동시에 진행
+  const [itemsOk, restOk] = await Promise.all([itemsPromise, restPromise]);
   setRemoteStatusUI(itemsOk && restOk ? "ok" : "error");
   return itemsOk && restOk;
 }
 
 async function saveToRemoteNow() {
   setRemoteStatusUI("syncing");
-  let itemsOk = false;
-  let restOk = false;
-  try {
-    await saveItemsToSupabase();
-    itemsOk = true;
-  } catch (e) {
-    // 아래에서 공통 처리
-  }
-  try {
-    const res = await fetch(REMOTE_WEBAPP_URL, {
-      method: "POST",
-      // text/plain으로 보내야 브라우저가 CORS 프리플라이트(OPTIONS)를 안 보내고,
-      // Apps Script 쪽에서는 e.postData.contents를 그냥 JSON으로 파싱한다.
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ key: REMOTE_WRITE_KEY, data: { boosts, nextBoostId, checklistCategories, nextCategoryId, nextChecklistItemId, craftMaterials, nextCraftMaterialId, collectionItems, nextCollectionItemId } }),
-    });
-    const json = await res.json();
-    restOk = !!json.ok;
-  } catch (e) {
-    // 아래에서 공통 처리
-  }
+
+  const itemsPromise = saveItemsToSupabase().then(() => true).catch(() => false);
+
+  const restPromise = (async () => {
+    try {
+      const res = await fetch(REMOTE_WEBAPP_URL, {
+        method: "POST",
+        // text/plain으로 보내야 브라우저가 CORS 프리플라이트(OPTIONS)를 안 보내고,
+        // Apps Script 쪽에서는 e.postData.contents를 그냥 JSON으로 파싱한다.
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ key: REMOTE_WRITE_KEY, data: { boosts, nextBoostId, checklistCategories, nextCategoryId, nextChecklistItemId, craftMaterials, nextCraftMaterialId, collectionItems, nextCollectionItemId } }),
+      });
+      const json = await res.json();
+      return !!json.ok;
+    } catch (e) {
+      return false;
+    }
+  })();
+
+  // 두 백엔드는 서로 의존관계가 없으므로 동시에 진행
+  const [itemsOk, restOk] = await Promise.all([itemsPromise, restPromise]);
   setRemoteStatusUI(itemsOk && restOk ? "ok" : "error");
 }
 
