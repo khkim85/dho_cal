@@ -200,7 +200,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-03</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-04</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -1630,7 +1630,7 @@ function rowsToLinesText(rows, existingSales) {
   const existing = existingSales || [];
   return (rows || [])
     .filter(r => r && r.city && r.price)
-    .filter(r => !existing.some(s => s.city === r.city && Number(s.price) === Number(r.price)))
+    .filter(r => !existing.some(s => s.city === r.city))
     .map(r => r.city + "," + (r.marketRate != null ? r.marketRate : 100) + "," + r.price)
     .join("\n");
 }
@@ -1679,8 +1679,32 @@ document.getElementById("bulkPasteSubmitBtn").addEventListener("click", () => {
     groups[name].push({ city, marketRate, price });
   });
 
-  let addedSales = 0, skippedDup = 0, newItemsCreated = 0, updatedItems = 0;
+  // 붙여넣은 텍스트 자체 안에서도 같은 품목+같은 도시가 여러 줄일 수 있으므로,
+  // 아래 병합 단계 전에 먼저 도시별로 하나만 남긴다 (marketBonus가 100에 더 가까운 쪽, 동률이면 더 큰 쪽).
+  function pickBetterOfTwo(a, b) {
+    const aDist = Math.abs(Number(a.marketRate) - 100);
+    const bDist = Math.abs(Number(b.marketRate) - 100);
+    if (aDist !== bDist) return aDist < bDist ? a : b;
+    return Number(a.marketRate) >= Number(b.marketRate) ? a : b;
+  }
+  Object.keys(groups).forEach(name => {
+    const byCity = {};
+    groups[name].forEach(row => {
+      byCity[row.city] = byCity[row.city] ? pickBetterOfTwo(byCity[row.city], row) : row;
+    });
+    groups[name] = Object.values(byCity);
+  });
+
+  let addedSales = 0, skippedDup = 0, updatedSales = 0, newItemsCreated = 0, updatedItems = 0;
   const newItemNames = [];
+
+  // marketBonus가 100에 더 가까운 쪽을 "더 나은 시세"로 본다. 동률이면 더 큰 쪽을 남긴다.
+  function isBetterRow(candidate, existing) {
+    const cDist = Math.abs(Number(candidate.marketRate) - 100);
+    const eDist = Math.abs(Number(existing.marketBonus) - 100);
+    if (cDist !== eDist) return cDist < eDist;
+    return Number(candidate.marketRate) > Number(existing.marketBonus);
+  }
 
   Object.keys(groups).forEach(name => {
     let item = items.find(i => i.name.trim().toLowerCase() === name.toLowerCase());
@@ -1694,8 +1718,18 @@ document.getElementById("bulkPasteSubmitBtn").addEventListener("click", () => {
     }
     if (!item.sales) item.sales = [];
     groups[name].forEach(row => {
-      const isDup = item.sales.some(s => s.city === row.city && Number(s.price) === Number(row.price));
-      if (isDup) { skippedDup++; return; }
+      // 중복 기준: 같은 품목 + 같은 도시 (가격/시세는 무관)
+      const existing = item.sales.find(s => s.city === row.city);
+      if (existing) {
+        if (isBetterRow(row, existing)) {
+          existing.price = row.price;
+          existing.marketBonus = row.marketRate;
+          updatedSales++;
+        } else {
+          skippedDup++;
+        }
+        return;
+      }
       item.sales.push({ id: nextSaleId++, city: row.city, price: row.price, marketBonus: row.marketRate, note: "" });
       addedSales++;
     });
@@ -1707,7 +1741,8 @@ document.getElementById("bulkPasteSubmitBtn").addEventListener("click", () => {
   render();
 
   let msg = addedSales + "건 추가";
-  if (skippedDup > 0) msg += ", 중복 " + skippedDup + "건 제외";
+  if (updatedSales > 0) msg += ", " + updatedSales + "건 갱신(더 나은 시세로 교체)";
+  if (skippedDup > 0) msg += ", 중복 " + skippedDup + "건 제외(기존 값 유지)";
   if (newItemsCreated > 0) msg += ", 신규 품목 " + newItemsCreated + "개 생성(" + newItemNames.join(", ") + " — 구분/분류/획득처는 '수정'으로 채워주세요)";
   if (updatedItems > 0) msg += ", 기존 품목 " + updatedItems + "개에 반영";
   if (malformed > 0) msg += ". 형식이 안 맞아 건너뛴 줄 " + malformed + "개";
