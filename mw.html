@@ -200,7 +200,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-09</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-01</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -1785,6 +1785,30 @@ async function handleAiScanFiles(files) {
     const data = json.data || {};
     const itemName = (data.itemName || "").trim();
     const rows = data.rows || [];
+    const itemsByCity = data.itemsByCity || [];
+
+    // 형태 B: 도시 하나 + 여러 품목 — "통합 붙여넣기" 칸(품목명,도시,시세,가격)에 채운다.
+    if (rows.length === 0 && itemsByCity.length > 0) {
+      const lines = [];
+      itemsByCity.forEach(entry => {
+        const city = (entry.city || "").trim();
+        (entry.items || []).forEach(it => {
+          if (!it.itemName || !city || !it.price) return;
+          lines.push(it.itemName + "," + city + "," + (it.marketRate != null ? it.marketRate : 100) + "," + it.price);
+        });
+      });
+      if (lines.length === 0) {
+        statusEl.textContent = "품목 정보를 찾지 못했습니다. 다른 스크린샷으로 시도해주세요.";
+        return;
+      }
+      document.getElementById("bulkPastePanel").style.display = "block";
+      const textarea = document.getElementById("bulkPasteTextarea");
+      const existing = textarea.value.trim();
+      textarea.value = (existing ? existing + "\n" : "") + lines.join("\n");
+      statusEl.textContent = lines.length + "건을 '통합 붙여넣기' 칸에 채워넣었습니다 (도시: " + itemsByCity.map(e => e.city).join(", ") + "). 아래에서 확인 후 '통합 등록'을 눌러주세요.";
+      return;
+    }
+
     if (rows.length === 0) {
       statusEl.textContent = "도시별 가격 정보를 찾지 못했습니다. 다른 스크린샷으로 시도해주세요.";
       return;
@@ -1871,11 +1895,25 @@ async function handleBulkPasteAiFiles(files) {
       const data = json.data || {};
       const itemName = (data.itemName || "").trim();
       const rows = data.rows || [];
-      if (!itemName || rows.length === 0) { failCount++; continue; }
-      rows.forEach(r => {
-        if (!r.city || !r.price) return;
-        newLines.push(itemName + "," + r.city + "," + (r.marketRate != null ? r.marketRate : 100) + "," + r.price);
-      });
+      const itemsByCity = data.itemsByCity || [];
+
+      if (rows.length > 0 && itemName) {
+        rows.forEach(r => {
+          if (!r.city || !r.price) return;
+          newLines.push(itemName + "," + r.city + "," + (r.marketRate != null ? r.marketRate : 100) + "," + r.price);
+        });
+      } else if (itemsByCity.length > 0) {
+        // 형태 B: 도시 하나 + 여러 품목 — 품목명,도시,시세,가격 형식으로 그대로 뒤집어 넣는다.
+        itemsByCity.forEach(entry => {
+          const city = (entry.city || "").trim();
+          (entry.items || []).forEach(it => {
+            if (!it.itemName || !city || !it.price) return;
+            newLines.push(it.itemName + "," + city + "," + (it.marketRate != null ? it.marketRate : 100) + "," + it.price);
+          });
+        });
+      } else {
+        failCount++;
+      }
     } catch (e) {
       failCount++;
     }
