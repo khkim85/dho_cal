@@ -200,7 +200,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-01</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-02</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -2293,17 +2293,28 @@ async function loadItemsFromSupabase() {
   if (!res.ok) throw new Error("supabase load failed: " + res.status);
   const rows = await res.json();
   lastKnownRemoteCount = rows.length; // 이번에 서버에서 실제로 읽어온 행 수 — 이후 저장 시 안전장치 기준
+  lastKnownRemoteKeys = new Set(rows.map(r => rowKey(r.itemName, r.city))); // 삭제 diff 계산 기준
   return rowsToItems(rows);
 }
 
-// 매번 전체를 지우고 다시 넣는 방식(간단하지만 트래픽은 더 씀).
-// 품목 수가 수백 개 수준이라 이 방식으로도 충분함.
+// upsert 방식: 서버 전체를 지우지 않고, (품목명+도시) 기준으로 있으면 갱신·없으면 추가한다.
+// 삭제는 "이 브라우저가 마지막으로 서버에서 읽어온 것과 비교해서, 지금은 없어진 (품목,도시)"만
+// 골라 그 항목들만 지운다 — 브라우저가 애초에 모르는(못 불러온) 서버 데이터는 절대 건드리지 않는다.
+let lastKnownRemoteKeys = null; // 직전 로드 시점의 (itemName||city) 키 Set — 삭제 diff 계산용
+
+function rowKey(itemName, city) {
+  return itemName + "||" + (city == null ? "" : city);
+}
+
 async function saveItemsToSupabase() {
   const rows = itemsToRows(items);
+  const currentKeys = new Set(rows.map(r => rowKey(r.itemName, r.city)));
 
   // 안전장치: 직전에 서버에서 실제로 읽어온 행 수를 알고 있는데, 지금 저장하려는
   // 행 수가 그것보다 현저히(30% 이상) 적다면 — 로딩이 덜 끝났거나 items가 잘못된
-  // 상태일 가능성이 높으므로, 서버를 지우지 않고 여기서 멈춘다.
+  // 상태일 가능성이 높으므로, 삭제 diff 계산 자체를 하지 않고 여기서 멈춘다.
+  // (upsert 자체는 삭제가 없는 한 안전하지만, 아래의 '사라진 항목 삭제'가 잘못
+  //  발동하지 않도록 이 체크는 그대로 유지한다.)
   if (lastKnownRemoteCount != null && rows.length < lastKnownRemoteCount * 0.7) {
     const err = new Error(
       "safety check: about to save " + rows.length + " rows, but server had " +
@@ -2315,30 +2326,43 @@ async function saveItemsToSupabase() {
     throw err;
   }
 
-  const delRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?itemId=gt.0`,
-    { method: "DELETE", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
-  );
-  if (!delRes.ok) throw new Error("supabase delete failed: " + delRes.status);
+  if (rows.length > 0) {
+    const insRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?on_conflict=itemName,city`,
+      {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify(rows),
+      }
+    );
+    if (!insRes.ok) throw new Error("supabase upsert failed: " + insRes.status);
+  }
 
-  if (rows.length === 0) return;
-  const insRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}`,
-    {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify(rows),
+  // 삭제 diff: 이 브라우저가 "직전에 서버에서 읽어왔을 때 있었는데, 지금은 없는" 키만 지운다.
+  // lastKnownRemoteKeys가 없으면(최초 로드 실패 등) 삭제는 아예 시도하지 않는다 — 모르면 안 지운다.
+  if (lastKnownRemoteKeys) {
+    const toDelete = [...lastKnownRemoteKeys].filter(k => !currentKeys.has(k));
+    for (const key of toDelete) {
+      const idx = key.indexOf("||");
+      const itemName = key.slice(0, idx);
+      const city = key.slice(idx + 2);
+      const cityFilter = city === "" ? "is.null" : `eq.${encodeURIComponent(city)}`;
+      const delRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?itemName=eq.${encodeURIComponent(itemName)}&city=${cityFilter}`,
+        { method: "DELETE", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      );
+      if (!delRes.ok) throw new Error("supabase delete failed: " + delRes.status + " (" + itemName + "/" + city + ")");
     }
-  );
-  if (!insRes.ok) throw new Error("supabase insert failed: " + insRes.status);
+  }
 
-  // 이번 저장이 성공했으면, 그 결과가 이제 서버의 새 기준이 된다.
+  // 이번 저장이 성공했으면, 그 결과가 이제 이 브라우저의 새 기준이 된다.
   lastKnownRemoteCount = rows.length;
+  lastKnownRemoteKeys = currentKeys;
 }
 
 async function loadFromRemote() {
