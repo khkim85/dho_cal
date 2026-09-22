@@ -293,6 +293,37 @@ window.addEventListener("mouseup", () => {
 });
 
 // ── 캡처 + AI 텍스트 추출 ────────────────────────────
+
+function captureSelectionAsBase64() {
+  if (!selection) return null;
+  const canvas = document.createElement("canvas");
+
+  // 너무 크지 않게 적정 해상도로 제한 (최대 폭 600px 기준 비율 유지)
+  const maxWidth = 600;
+  let targetW = selection.w;
+  let targetH = selection.h;
+  if (targetW > maxWidth) {
+    const ratio = maxWidth / targetW;
+    targetW = maxWidth;
+    targetH = Math.round(targetH * ratio);
+  }
+
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext("2d");
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  ctx.drawImage(video, selection.x, selection.y, selection.w, selection.h, 0, 0, targetW, targetH);
+
+  // PNG 대신 JPEG(품질 0.85)를 사용해 전송 용량을 획기적으로 줄입니다.
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  return { base64: dataUrl.split(",")[1], dataUrl };
+}
+  
+/*  
+// 구버전임.
 function captureSelectionAsBase64() {
   if (!selection) return null;
   const canvas = document.createElement("canvas");
@@ -304,7 +335,7 @@ function captureSelectionAsBase64() {
   ctx.drawImage(video, selection.x, selection.y, selection.w, selection.h, 0, 0, canvas.width, canvas.height);
   const dataUrl = canvas.toDataURL("image/png");
   return { base64: dataUrl.split(",")[1], dataUrl };
-}
+} */
 
 function addLogEntry(text, thumbDataUrl) {
   const now = new Date();
@@ -335,7 +366,17 @@ function renderLog() {
 
 let accumulatedRows = []; // 구조화 모드 누적 결과
 let accumulatedFields = [];
+let lastCanvasDataHash = "";
 
+function simpleHash(base64Str) {
+  let hash = 0;
+  for (let i = 0; i < base64Str.length; i += 50) {
+    hash = ((hash << 5) - hash) + base64Str.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash;
+}
+  
 function getMode() {
   return document.getElementById("modeSelect").value;
 }
@@ -378,8 +419,20 @@ document.getElementById("modeSelect").addEventListener("change", () => {
 async function scanOnce() {
   const captured = captureSelectionAsBase64();
   if (!captured) return;
+  // --- [추가] 화면 변화가 없으면 AI 호출을 스킵하는 로직 ---
+  const currentHash = simpleHash(captured.base64);
+  // 자동 감시 중일 때만 변화 감지 스킵을 적용하고 싶다면 조건을 걸 수 있습니다.
+  if (watchTimer && currentHash === lastCanvasDataHash) {
+    console.log("화면 변화 없음 - AI 호출 스킵");
+    return; 
+  }
+  lastCanvasDataHash = currentHash;
+  // ----------------------------------------------------
+
   showToast("📸 캡처됨 — 읽는 중...");
   const mode = getMode();
+
+  
   setStatus("busy", "읽는 중...");
   try {
     const body = { image: { mimeType: "image/png", data: captured.base64 }, mode, model: document.getElementById("modelSelect").value };
