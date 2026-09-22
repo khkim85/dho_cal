@@ -244,7 +244,7 @@ document.getElementById("stopShareBtn").addEventListener("click", stopSharing);
 // ── 영역 드래그 선택 ─────────────────────────────────
 captureArea.addEventListener("mousedown", (e) => {
   if (!mediaStream) return;
-  const rect = video.getBoundingClientRect();
+    const rect = video.getBoundingClientRect();
   dragStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
   selectionBox.style.left = dragStart.x + "px";
   selectionBox.style.top = dragStart.y + "px";
@@ -317,6 +317,17 @@ function captureSelectionAsBase64() {
 
   ctx.drawImage(video, selection.x, selection.y, selection.w, selection.h, 0, 0, targetW, targetH);
 
+// 캔버스에 그린 후 흑백(Grayscale)으로 변환하는 코드 추가
+  const imgData = ctx.getImageData(0, 0, targetW, targetH);
+  const data = imgData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const avg = data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11;
+    data[i] = avg;     // R
+    data[i + 1] = avg; // G
+    data[i + 2] = avg; // B
+  }
+  ctx.putImageData(imgData, 0, 0);
+  
   // PNG 대신 JPEG(품질 0.85)를 사용해 전송 용량을 획기적으로 줄입니다.
   const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
   return { base64: dataUrl.split(",")[1], dataUrl };
