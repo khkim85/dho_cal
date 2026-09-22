@@ -200,7 +200,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-06</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-07</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -221,7 +221,14 @@
   <input type="file" id="loadFile" accept="application/json" style="display:none;">
   <button id="resetAll">전체 초기화</button>
   <button id="checkInvalidCitiesBtn">🔍 잘못된 도시명 검사</button>
+  <button id="showSummaryBtn">📊 등록 현황 요약</button>
   <span id="remoteStatus" style="font-size:12px;"></span>
+</div>
+
+<div class="panel" id="summaryPanel" style="display:none;">
+  <h2>품목별 등록 현황</h2>
+  <p class="hint">전체 224개 도시 기준, 품목별로 몇 개 도시에 판매 기록이 등록되었는지 보여줍니다.</p>
+  <div id="summaryList"></div>
 </div>
 
 <div class="panel" id="invalidCitiesPanel" style="display:none;">
@@ -1076,7 +1083,7 @@ function renderList() {
     if (filterOrigin && it.origin !== filterOrigin) return false;
     if (term && !it.name.toLowerCase().includes(term)) return false;
     return true;
-  });
+  }).sort((a, b) => (a.source || "").localeCompare(b.source || "", "ko"));
 
   if (list.length === 0) {
     const hint = document.createElement("div");
@@ -2108,10 +2115,42 @@ function renderInvalidCities() {
     });
   }
 }
+
+function renderSummary() {
+  const panel = document.getElementById("summaryPanel");
+  const list = document.getElementById("summaryList");
+  panel.style.display = "block";
+
+  const totalCities = UWO_DATA.ALL_CITIES.length;
+  const rows = items
+    .map(item => ({
+      name: item.name,
+      source: item.source,
+      registered: new Set((item.sales || []).map(s => s.city)).size,
+    }))
+    .sort((a, b) => (a.source || "").localeCompare(b.source || "", "ko") || b.registered - a.registered);
+
+  if (rows.length === 0) {
+    list.innerHTML = "<div class='empty-hint'>등록된 교역품이 없습니다.</div>";
+    return;
+  }
+
+  list.innerHTML =
+    "<table class='sales-table'><tr><th>구분</th><th>교역품</th><th>등록 도시 수</th><th>미등록</th></tr>" +
+    rows.map(r =>
+      "<tr><td>" + (r.source || "-") + "</td><td>" + r.name + "</td><td>" + r.registered + " / " + totalCities + "</td><td>" + (totalCities - r.registered) + "</td></tr>"
+    ).join("") + "</table>";
+}
 document.getElementById("checkInvalidCitiesBtn").addEventListener("click", () => {
   const panel = document.getElementById("invalidCitiesPanel");
   if (panel.style.display === "block") { panel.style.display = "none"; return; }
   renderInvalidCities();
+});
+
+document.getElementById("showSummaryBtn").addEventListener("click", () => {
+  const panel = document.getElementById("summaryPanel");
+  if (panel.style.display === "block") { panel.style.display = "none"; return; }
+  renderSummary();
 });
 
 // ── 원격 저장 (이원화: items는 Supabase / 나머지는 기존 Apps Script 웹앱) ──
