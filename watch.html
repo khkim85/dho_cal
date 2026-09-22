@@ -430,39 +430,47 @@ document.getElementById("modeSelect").addEventListener("change", () => {
 async function scanOnce() {
   const captured = captureSelectionAsBase64();
   if (!captured) return;
-  // --- [추가] 화면 변화가 없으면 AI 호출을 스킵하는 로직 ---
-  const currentHash = simpleHash(captured.base64);
-  // 자동 감시 중일 때만 변화 감지 스킵을 적용하고 싶다면 조건을 걸 수 있습니다.
-  if (watchTimer && currentHash === lastCanvasDataHash) {
-    console.log("화면 변화 없음 - AI 호출 스킵");
-    return; 
-  }
-  lastCanvasDataHash = currentHash;
-  // ----------------------------------------------------
 
+  // 화면 변화 감지 로직이 있다면 이 위치에 들어갑니다.
   showToast("📸 캡처됨 — 읽는 중...");
   const mode = getMode();
-
-  
   setStatus("busy", "읽는 중...");
+
   try {
-    const body = { image: { mimeType: "image/png", data: captured.base64 }, mode, model: document.getElementById("modelSelect").value };
+    const body = { 
+      image: { mimeType: "image/jpeg", data: captured.base64 }, 
+      mode, 
+      model: document.getElementById("modelSelect").value 
+    };
+    
     if (mode === "structured") {
       body.fields = getFields();
       const extra = document.getElementById("extraInstructionInput").value.trim();
       if (extra) body.extraInstruction = extra;
     }
-    logApiUsage(body.model);
 
     const res = await fetch("/scan-text", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const json = await res.json();
+
+    // ── [핵심 수정] 서버가 524 타임아웃이나 HTML 에러 페이지를 보냈을 때의 안전 장치 ──
+    const rawText = await res.text();
+    let json;
+    try {
+      json = JSON.parse(rawText);
+    } catch (err) {
+      // JSON 파싱에 실패했다는 건 서버가 HTML 에러 페이지(524 등)를 보냈다는 뜻입니다.
+      console.error("서버 응답 파싱 실패 (HTML 또는 타임아웃 의심):", rawText);
+      addLogEntry("(오류: 서버 응답 지연 또는 타임아웃 발생 - 524 에러)", captured.dataUrl);
+      setStatus("live", "감시 중 (서버 응답 오류)");
+      return;
+    }
+    // --------------------------------------------------------------------------------
 
     if (!json.ok) {
-      addLogEntry("(오류: " + (json.error || "알 수 없음") + ")", captured.dataUrl);
+      addLogEntry("(오류: " + (json.error || "알 수 없는 오류") + ")", captured.dataUrl);
       setStatus("live", "감시 중 (오류 발생)");
       return;
     }
@@ -488,7 +496,7 @@ async function scanOnce() {
     setStatus("live", "감시 중");
   } catch (e) {
     addLogEntry("(오류: " + e.message + ")", captured.dataUrl);
-    setStatus("live", "감시 중 (오류 발생)");
+    setStatus("live", "감시 중 (네트워크 오류)");
   }
 }
 
