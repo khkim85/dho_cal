@@ -200,7 +200,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-07</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-08</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -1023,6 +1023,8 @@ function getSeasonBonus(city, category) {
 
 let items = [];
 let hasUnsavedChanges = false;
+let initDone = false; // 최초 원격 로드가 완전히 끝나기 전에는 저장을 막기 위한 플래그
+let lastKnownRemoteCount = null; // 직전에 원격에서 불러온 items 총 판매기록 수(안전장치 기준)
 let nextItemId = 1;
 let nextSaleId = 1;
 let openItemId = null;
@@ -1071,8 +1073,6 @@ function renderCategoryFilterOptions() {
 }
 
 function renderList() {
-  saveToLocalStorage();
-  scheduleRemoteSave();
   const container = document.getElementById("itemList");
   container.innerHTML = "";
 
@@ -2254,19 +2254,31 @@ async function loadItemsFromSupabase() {
   );
   if (!res.ok) throw new Error("supabase load failed: " + res.status);
   const rows = await res.json();
+  lastKnownRemoteCount = rows.length; // 이번에 서버에서 실제로 읽어온 행 수 — 이후 저장 시 안전장치 기준
   return rowsToItems(rows);
 }
 
 // 매번 전체를 지우고 다시 넣는 방식(간단하지만 트래픽은 더 씀).
 // 품목 수가 수백 개 수준이라 이 방식으로도 충분함.
 async function saveItemsToSupabase() {
+  const rows = itemsToRows(items);
+
+  // 안전장치: 직전에 서버에서 실제로 읽어온 행 수를 알고 있는데, 지금 저장하려는
+  // 행 수가 그것보다 현저히(30% 이상) 적다면 — 로딩이 덜 끝났거나 items가 잘못된
+  // 상태일 가능성이 높으므로, 서버를 지우지 않고 여기서 멈춘다.
+  if (lastKnownRemoteCount != null && rows.length < lastKnownRemoteCount * 0.7) {
+    throw new Error(
+      "safety check: about to save " + rows.length + " rows, but server had " +
+      lastKnownRemoteCount + " — refusing to overwrite (possible incomplete load)"
+    );
+  }
+
   const delRes = await fetch(
     `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?itemId=gt.0`,
     { method: "DELETE", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
   );
   if (!delRes.ok) throw new Error("supabase delete failed: " + delRes.status);
 
-  const rows = itemsToRows(items);
   if (rows.length === 0) return;
   const insRes = await fetch(
     `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}`,
@@ -2282,6 +2294,9 @@ async function saveItemsToSupabase() {
     }
   );
   if (!insRes.ok) throw new Error("supabase insert failed: " + insRes.status);
+
+  // 이번 저장이 성공했으면, 그 결과가 이제 서버의 새 기준이 된다.
+  lastKnownRemoteCount = rows.length;
 }
 
 async function loadFromRemote() {
@@ -2351,7 +2366,10 @@ async function saveToRemoteNow() {
 }
 
 // 입력할 때마다 매번 쏘지 않고, 마지막 변경 후 1.2초 뒤에 한 번만 저장 (디바운스)
+// 안전장치: 최초 원격 로드가 완전히 끝나기 전에는(initDone === false) 절대 저장을 예약하지 않는다.
+// 그 전에 저장이 걸리면, 아직 다 못 불러온 불완전한 items로 서버를 덮어쓸 수 있기 때문.
 function scheduleRemoteSave() {
+  if (!initDone) return;
   if (remoteSyncTimer) clearTimeout(remoteSyncTimer);
   remoteSyncTimer = setTimeout(saveToRemoteNow, 1200);
 }
@@ -2452,6 +2470,8 @@ function cleanupOldBoosts() {
   renderChecklistTab();
   renderCraftMaterials();
   renderCollectionChecklist();
+  // 여기까지 왔으면 원격이든 로컬이든 데이터 로딩이 끝난 것이므로, 이제부터 저장을 허용한다.
+  initDone = true;
 })();
 setInterval(() => {
   if (cleanupOldBoosts()) {
