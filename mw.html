@@ -200,7 +200,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-08</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-19-09</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -2267,10 +2267,14 @@ async function saveItemsToSupabase() {
   // 행 수가 그것보다 현저히(30% 이상) 적다면 — 로딩이 덜 끝났거나 items가 잘못된
   // 상태일 가능성이 높으므로, 서버를 지우지 않고 여기서 멈춘다.
   if (lastKnownRemoteCount != null && rows.length < lastKnownRemoteCount * 0.7) {
-    throw new Error(
+    const err = new Error(
       "safety check: about to save " + rows.length + " rows, but server had " +
       lastKnownRemoteCount + " — refusing to overwrite (possible incomplete load)"
     );
+    err.isSafetyCheck = true;
+    err.rowsAttempted = rows.length;
+    err.rowsExpected = lastKnownRemoteCount;
+    throw err;
   }
 
   const delRes = await fetch(
@@ -2342,7 +2346,14 @@ async function loadFromRemote() {
 async function saveToRemoteNow() {
   setRemoteStatusUI("syncing");
 
-  const itemsPromise = saveItemsToSupabase().then(() => true).catch(() => false);
+  let safetyBlocked = null; // 안전장치가 막은 경우, 여기에 상세 정보를 담아 별도로 안내한다
+  const itemsPromise = saveItemsToSupabase()
+    .then(() => true)
+    .catch((e) => {
+      console.error("items save failed:", e);
+      if (e && e.isSafetyCheck) safetyBlocked = e;
+      return false;
+    });
 
   const restPromise = (async () => {
     try {
@@ -2363,15 +2374,36 @@ async function saveToRemoteNow() {
   // 두 백엔드는 서로 의존관계가 없으므로 동시에 진행
   const [itemsOk, restOk] = await Promise.all([itemsPromise, restPromise]);
   setRemoteStatusUI(itemsOk && restOk ? "ok" : "error");
+
+  // 저장 실패는 알림으로도 눈에 띄게 띄운다. 알림을 띄우는 것과 별개로 저장 시도
+  // 자체는 이미 위에서 끝난 뒤이므로, 알림이 저장을 막거나 지연시키지 않는다.
+  if (safetyBlocked) {
+    // 안전장치가 의도적으로 막은 경우 — 이건 "네트워크 문제"가 아니라 "지금 화면 상태가
+    // 서버보다 데이터가 훨씬 적어서, 실수로 서버를 지우지 않으려고 저장을 보류했다"는 뜻.
+    alert(
+      "🛑 저장이 보류되었습니다\n\n" +
+      "지금 이 화면에 있는 판매기록(" + safetyBlocked.rowsAttempted + "건)이 " +
+      "서버에 저장된 것(" + safetyBlocked.rowsExpected + "건)보다 훨씬 적습니다.\n\n" +
+      "페이지 로딩이 덜 끝났거나 데이터가 일부만 불러와졌을 수 있어, " +
+      "실수로 서버 데이터를 지우지 않도록 저장을 하지 않았습니다.\n" +
+      "페이지를 새로고침한 뒤 다시 시도해 주세요."
+    );
+  } else if (!itemsOk || !restOk) {
+    const which = !itemsOk && !restOk ? "교역품 판매기록(Supabase)과 일정/체크리스트(구글시트) 모두"
+      : !itemsOk ? "교역품 판매기록(Supabase)" : "일정/체크리스트(구글시트)";
+    alert("⚠️ 자동 저장 실패\n\n" + which + " 저장에 실패했습니다.\n네트워크 상태를 확인하고, 잠시 후 다시 시도됩니다.\n(로컬에는 저장되어 있으니 작업 내용 자체는 안전합니다.)");
+  }
 }
 
-// 입력할 때마다 매번 쏘지 않고, 마지막 변경 후 1.2초 뒤에 한 번만 저장 (디바운스)
+// 입력할 때마다 매번 쏘지 않고, 마지막 변경 후 일정 시간 뒤에 한 번만 저장 (디바운스).
+// 너무 잦은 저장(=서버 요청, DELETE+INSERT 비용)을 피하기 위해 주기를 넉넉히 잡는다.
 // 안전장치: 최초 원격 로드가 완전히 끝나기 전에는(initDone === false) 절대 저장을 예약하지 않는다.
 // 그 전에 저장이 걸리면, 아직 다 못 불러온 불완전한 items로 서버를 덮어쓸 수 있기 때문.
+const REMOTE_SAVE_DEBOUNCE_MS = 15000; // 15초
 function scheduleRemoteSave() {
   if (!initDone) return;
   if (remoteSyncTimer) clearTimeout(remoteSyncTimer);
-  remoteSyncTimer = setTimeout(saveToRemoteNow, 1200);
+  remoteSyncTimer = setTimeout(saveToRemoteNow, REMOTE_SAVE_DEBOUNCE_MS);
 }
 
 // ── 자동 저장 (localStorage, 원격 실패 시 대비용 백업) ──
