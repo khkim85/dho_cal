@@ -193,6 +193,32 @@
   .collection-table th { color: var(--text-muted); font-weight: 700; font-size: 11px; }
   .collection-table tr.done .collection-name { text-decoration: line-through; color: var(--text-muted); }
   .craft-city-chip { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+
+  /* 진짜 팝업(모달) — 화면 전체를 덮는 어두운 배경 위에 뜨는 박스 */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 1000; align-items: center; justify-content: center; padding: 24px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--bg); border: 1px solid var(--border-strong); border-radius: 10px;
+    max-width: 1100px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 20px 24px;
+  }
+  .modal-box .row.modal-header { justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .modal-close-btn { font-size: 20px; line-height: 1; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px 8px; }
+  .modal-close-btn:hover { color: var(--text); }
+  .city-grid-region { margin-bottom: 18px; }
+  .city-grid-region h3 { font-size: 13px; color: var(--text-muted); margin: 0 0 8px; }
+  .city-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
+  .city-grid-cell {
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px;
+    background: var(--card); text-align: center;
+  }
+  .city-grid-cell .city-grid-name { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .city-grid-cell .city-grid-count { display: block; font-variant-numeric: tabular-nums; color: var(--text-muted); margin-top: 2px; }
+  .city-grid-cell.full { border-color: #7ec996; }
+  .city-grid-cell.full .city-grid-count { color: #7ec996; }
+  .city-grid-cell.empty { opacity: 0.5; }
 </style>
 <script src="/usage-log.js"></script>
 <script src="/corrections.js"></script>
@@ -201,7 +227,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-08</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-09</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -223,7 +249,19 @@
   <button id="resetAll">전체 초기화</button>
   <button id="checkInvalidCitiesBtn">🔍 잘못된 도시명 검사</button>
   <button id="showSummaryBtn">📊 등록 현황 요약</button>
+  <button id="showCityGridBtn">🗺️ 도시별 물물교환 등록 현황</button>
   <span id="remoteStatus" style="font-size:12px;"></span>
+</div>
+
+<div class="modal-overlay" id="cityGridModal">
+  <div class="modal-box">
+    <div class="row modal-header">
+      <h2 style="margin:0;">도시별 물물교환 등록 현황</h2>
+      <button class="modal-close-btn" id="closeCityGridBtn">&times;</button>
+    </div>
+    <p class="hint">각 도시마다 (등록된 물물교환 품목 수 / 전체 물물교환 품목 수)를 보여줍니다. 지역별로 묶여 있습니다.</p>
+    <div id="cityGridBody"></div>
+  </div>
 </div>
 
 <div class="panel" id="summaryPanel" style="display:none;">
@@ -2339,6 +2377,59 @@ document.getElementById("showSummaryBtn").addEventListener("click", () => {
   const panel = document.getElementById("summaryPanel");
   if (panel.style.display === "block") { panel.style.display = "none"; return; }
   renderSummary();
+});
+
+// ── 도시별 물물교환 등록 현황 (진짜 팝업 모달) ──
+function renderCityGrid() {
+  const barterItems = items.filter(it => it.source === "물물교환");
+  const totalBarter = barterItems.length; // "등록된 값 기준" — 지금 실제 등록된 물물교환 품목 종류 수를 분모로 삼는다
+
+  // 도시별로, 등록된 물물교환 품목이 몇 종류인지 집계
+  const countByCity = {};
+  barterItems.forEach(item => {
+    (item.sales || []).forEach(s => {
+      if (!s.city) return;
+      countByCity[s.city] = (countByCity[s.city] || 0) + 1;
+    });
+  });
+
+  // 지역별로 도시 묶기 (등록 여부와 무관하게 전체 224개 도시 기준으로 지역을 나눈다)
+  const byRegion = {};
+  UWO_DATA.ALL_CITIES.forEach(city => {
+    const region = UWO_DATA.CITY_TO_REGION[city] || "(지역 미상)";
+    if (!byRegion[region]) byRegion[region] = [];
+    byRegion[region].push(city);
+  });
+
+  const body = document.getElementById("cityGridBody");
+  if (totalBarter === 0) {
+    body.innerHTML = "<div class='empty-hint'>등록된 물물교환 품목이 없습니다.</div>";
+    return;
+  }
+
+  body.innerHTML = Object.keys(byRegion).sort((a, b) => a.localeCompare(b, "ko")).map(region => {
+    const cities = byRegion[region].sort((a, b) => a.localeCompare(b, "ko"));
+    const cells = cities.map(city => {
+      const count = countByCity[city] || 0;
+      const cls = count === totalBarter ? "full" : (count === 0 ? "empty" : "");
+      return "<div class='city-grid-cell " + cls + "'>" +
+        "<span class='city-grid-name'>" + city + "</span>" +
+        "<span class='city-grid-count'>" + count + " / " + totalBarter + "</span>" +
+        "</div>";
+    }).join("");
+    return "<div class='city-grid-region'><h3>" + region + " (" + cities.length + "개 도시)</h3><div class='city-grid'>" + cells + "</div></div>";
+  }).join("");
+}
+document.getElementById("showCityGridBtn").addEventListener("click", () => {
+  renderCityGrid();
+  document.getElementById("cityGridModal").classList.add("open");
+});
+document.getElementById("closeCityGridBtn").addEventListener("click", () => {
+  document.getElementById("cityGridModal").classList.remove("open");
+});
+// 오버레이의 어두운 배경(모달 박스 바깥) 클릭 시에도 닫히게 한다
+document.getElementById("cityGridModal").addEventListener("click", (e) => {
+  if (e.target.id === "cityGridModal") document.getElementById("cityGridModal").classList.remove("open");
 });
 
 // ── 원격 저장 (이원화: items는 Supabase / 나머지는 기존 Apps Script 웹앱) ──
