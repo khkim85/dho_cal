@@ -227,7 +227,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-10</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-11</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -1151,28 +1151,78 @@ function renderList() {
   list.forEach(item => container.appendChild(makeItemCard(item)));
 }
 
-// 지역 우대(%) / 시즌 우대(%)는 "가산 보너스"라 서로 더해서 적용되지만,
-// 시세(%)는 게임 화면 표시 그대로 "100%가 기준(평소), 103%면 3%만 비쌈"인
-// 절대 지표라서 계산 방식이 다르다:
-//   가격 = 순수가치 × (1 + (지역우대+시즌우대)/100) × (시세/100)
-// 지역우대·시즌우대는 도시(→문화권)와 교역품(분류/이름)으로부터 자동 조회한다.
-//
-// "기준단가"(화면 표시용)는 시세%만 제외한 값 — 지역/시즌 우대는 그 도시·시기 고유의
-// 구조적인 값이라 보고, 일시적인 시세 변동만 걷어낸 게 "기준"이라는 정의.
-// 즉 "시세 100% 기준으로 환산했을 때의 가치"와 동일하다.
-// 반면 "순수가치"(itemIntrinsicValue)는 지역/시즌/시세를 전부 걷어낸, 도시와 무관한
-// 품목 고유값 추정치로, 계산기에서 "기록 없는 다른 도시"에 적용할 때만 내부적으로 쓴다.
-//
-// 시세%를 입력 안 하면 100(평소)으로 간주한다 — 0으로 취급하면 나누기 오류가 남.
-function saleBonuses(sale, item) {
+// ── 분류별 할증표 (개인 캐릭터 보너스 — 본계정 기준, 실측 확정값) ──
+// 각 분류마다: 수집효과, 선박및항해사(분류), [분류]기타 를 담는다.
+// 공통(모든 분류에 동일 적용): 교역품판매가격할증 15.8%, 교역소판매우대 5%,
+//   선박및항해사(전체) 3.5%, 전체기타 13.2%
+const CATEGORY_BONUS_TABLE = {
+  "식료품": { collect: 2,   ship: 15,   etc: 0.5 },
+  "조미료": { collect: 1,   ship: 2.5,  etc: 0.5 },
+  "가축":   { collect: 2,   ship: 2.5,  etc: 0.5 },
+  "잡화":   { collect: 1,   ship: 1,    etc: 0.5 },
+  "주류":   { collect: 0.5, ship: 0.2,  etc: 0.5 },
+  "공업품": { collect: 2,   ship: 2.5,  etc: 0.5 },
+  "기호품": { collect: 0.8, ship: 0.5,  etc: 0.5 },
+  "직물":   { collect: 1,   ship: 20.5, etc: 0.5 },
+  "무기류": { collect: 1.5, ship: 1.2,  etc: 0.5 },
+  "총포류": { collect: 0.2, ship: 1.8,  etc: 0.5 },
+  "공예품": { collect: 1.4, ship: 26.9, etc: 0.5 },
+  "미술품": { collect: 1,   ship: 10,   etc: 0.5 },
+  "향신료": { collect: 0.4, ship: 20.5, etc: 0.5 },
+  "귀금속": { collect: 0.1, ship: 11.5, etc: 0.5 },
+  "향료":   { collect: 0.2, ship: 1.9,  etc: 0.5 },
+  "보석":   { collect: 0.2, ship: 3.1,  etc: 0.5 },
+  "광석":   { collect: 1,   ship: 0,    etc: 0.5 },
+  "섬유":   { collect: 1,   ship: 0,    etc: 0.5 },
+  "염료":   { collect: 1,   ship: 0,    etc: 0.5 },
+  "의약품": { collect: 1,   ship: 0,    etc: 0.5 },
+};
+const PERSONAL_COMMON = {
+  fleetKnowledge: 15.8, // 교역품 판매 가격 할증 (함대 전문 지식, 현재 레벨 기준)
+  language: 5,          // 교역소 판매 우대 (언어 효과)
+  shipAllCategory: 3.5, // 판매 가격 할증률 - 선박 및 항해사 효과(전체)
+  otherAll: 13.2,        // 판매 가격 할증률 - 기타 효과(전체, 본계정 기준)
+};
+const STANDARD_BONUS_PERCENT = 20; // 기준판매가에 반영할 표준 할증: 판매전략20레벨(15%) + 언어효과(5%)
+
+// 이 품목의 분류에 해당하는 개인 총 할증률(%) — 위 표들의 합
+function personalTotalBonusPercent(category) {
+  const cat = CATEGORY_BONUS_TABLE[category];
+  const catSum = cat ? (cat.collect + cat.ship + cat.etc) : 0;
+  return PERSONAL_COMMON.fleetKnowledge + PERSONAL_COMMON.language +
+    PERSONAL_COMMON.shipAllCategory + PERSONAL_COMMON.otherAll + catSum;
+}
+
+// 실측 판매가(sale.price) -> 개인 할증을 제거한 "판매원가"(marketRate는 아직 반영된 채로)
+function saleCostPrice(sale, item) {
+  const personalBonus = personalTotalBonusPercent(item.category);
+  return sale.price / (1 + personalBonus / 100);
+}
+// 판매원가 -> marketRate를 100% 기준으로 환산
+function costPrice100(sale, item) {
+  const marketRate = sale.marketRate != null && sale.marketRate !== "" ? sale.marketRate : 100;
+  return saleCostPrice(sale, item) / (marketRate / 100);
+}
+// 기준판매가 = 100%기준 판매원가에 "표준 할증(20%)"만 다시 적용한 값 (화면 표시용, 비교 가능한 값)
+function baseSalePrice(sale, item) {
+  return costPrice100(sale, item) * (1 + STANDARD_BONUS_PERCENT / 100);
+}
+// 진짜 원가 = 100%기준 판매원가에서 지역우대(카테고리+품목+시즌)까지 마저 제거한 값 (Supabase 저장용, 화면 비표시)
+function trueCostPrice(sale, item) {
+  const b = saleBonusesOld(sale, item);
+  const regionSeasonMultiplier = 1 + (b.regionBonus + b.seasonBonus) / 100;
+  return costPrice100(sale, item) / regionSeasonMultiplier;
+}
+
+// 지역/시즌 우대(도시·문화권 기반) 조회 — 기존 로직 그대로, 이름만 구분(saleBonusesOld)
+function saleBonusesOld(sale, item) {
   const regionBonus = getRegionBonus(sale.city, item.category, item.name);
   const seasonBonus = getSeasonBonus(sale.city, item.category);
   const marketRate = sale.marketRate != null && sale.marketRate !== "" ? sale.marketRate : 100;
   return { regionBonus, seasonBonus, marketRate };
 }
-function baseSalePrice(sale, item) {
-  const b = saleBonuses(sale, item);
-  return sale.price / (b.marketRate / 100);
+function saleBonuses(sale, item) {
+  return saleBonusesOld(sale, item);
 }
 function itemIntrinsicValue(sale, item) {
   const b = saleBonuses(sale, item);
@@ -1184,7 +1234,7 @@ function itemIntrinsicValue(sale, item) {
 // 각 품목의 판매 기록 표 헤더 클릭 정렬 상태 (item 객체 자체엔 저장 안 함 — 동기화 데이터에 안 섞이게)
 const itemSaleSort = {}; // { [itemId]: { col, dir } }
 function getSaleSortState(itemId) {
-  if (!itemSaleSort[itemId]) itemSaleSort[itemId] = { col: "기준단가", dir: "desc" };
+  if (!itemSaleSort[itemId]) itemSaleSort[itemId] = { col: "기준판매가", dir: "desc" };
   return itemSaleSort[itemId];
 }
 function saleColumnValue(col, s, item) {
@@ -1193,11 +1243,10 @@ function saleColumnValue(col, s, item) {
     case "도시": return s.city || "";
     case "지역": return getRegion(s.city) || "";
     case "문화권": return getCulture(s.city) || "";
-    case "판매가": return s.price;
+    case "판매단가": return s.price;
     case "지역 우대%": return b.regionBonus;
     case "시즌 우대%": return b.seasonBonus;
-    case "시세%": return b.marketRate;
-    case "기준단가": return baseSalePrice(s, item);
+    case "기준판매가": return baseSalePrice(s, item);
     case "비고": return s.note || "";
     default: return "";
   }
@@ -1237,7 +1286,7 @@ function makeItemCard(item) {
   const bestLabel = document.createElement("div");
   bestLabel.className = "item-best";
   bestLabel.innerHTML = best
-    ? "<span class='best-label'>최고 기준단가</span><span class='best-value'>" + best.city + " (" + Math.round(baseSalePrice(best, item)).toLocaleString() + ")</span>"
+    ? "<span class='best-label'>최고 기준판매가</span><span class='best-value'>" + best.city + " (" + Math.round(baseSalePrice(best, item)).toLocaleString() + ")</span>"
     : "<span class='best-label'></span><span class='best-value' style='color:var(--text-muted); font-weight:400;'>판매 기록 없음</span>";
 
   const noFilterActive = !searchTerm && !filterSource && !filterCategory && !filterOrigin;
@@ -1429,7 +1478,7 @@ function makeItemCard(item) {
       : va - vb;
     return sortState.dir === "asc" ? cmp : -cmp;
   });
-  const SALE_COLUMNS = ["도시", "지역", "문화권", "판매가", "지역 우대%", "시즌 우대%", "시세%", "기준단가", "비고"];
+  const SALE_COLUMNS = ["도시", "지역", "문화권", "지역 우대%", "시즌 우대%", "판매단가", "기준판매가", "비고"];
   table.innerHTML = "<tr>" + SALE_COLUMNS.map(col => {
     const arrow = sortState.col === col ? (sortState.dir === "asc" ? " ▲" : " ▼") : "";
     return "<th class='sortable-th' data-col=\"" + col + "\">" + col + arrow + "</th>";
@@ -1443,12 +1492,13 @@ function makeItemCard(item) {
           "<td><input type='text' class='sale-edit-city' list='allCitiesOptions' value=\"" + (s.city || "").replace(/"/g, "&quot;") + "\" style='width:100px;'></td>" +
           "<td class='num'>" + region + "</td>" +
           "<td class='num'>" + culture + "</td>" +
-          "<td><input type='number' class='sale-edit-price' value='" + s.price + "' style='width:80px;'></td>" +
           "<td class='num'>" + b.regionBonus + "%</td>" +
           "<td class='num'>" + b.seasonBonus + "%</td>" +
-          "<td><input type='number' class='sale-edit-market' value='" + (s.marketRate != null ? s.marketRate : 100) + "' style='width:55px;'></td>" +
+          "<td><input type='number' class='sale-edit-price' value='" + s.price + "' style='width:80px;'></td>" +
           "<td class='num'>-</td>" +
           "<td><input type='text' class='sale-edit-note' value=\"" + (s.note || "").replace(/"/g, "&quot;") + "\" style='width:90px;'></td>" +
+          // 시세%는 화면에서 감추되 계산에는 계속 쓰이므로, 눈에 안 보이는 입력으로 값만 유지한다
+          "<td style='display:none;'><input type='number' class='sale-edit-market' value='" + (s.marketRate != null ? s.marketRate : 100) + "'></td>" +
           "<td style='white-space:nowrap;'>" +
             "<button class='small primary sale-save-btn' data-sale-id='" + s.id + "'>저장</button> " +
             "<button class='small sale-cancel-btn'>취소</button>" +
@@ -1459,10 +1509,9 @@ function makeItemCard(item) {
         "<td>" + s.city + "</td>" +
         "<td>" + region + "</td>" +
         "<td>" + culture + "</td>" +
-        "<td class='num'>" + s.price.toLocaleString() + "</td>" +
         "<td class='num'>" + b.regionBonus + "%</td>" +
         "<td class='num'>" + b.seasonBonus + "%</td>" +
-        "<td class='num'>" + b.marketRate + "%</td>" +
+        "<td class='num'>" + s.price.toLocaleString() + "</td>" +
         "<td class='num'>" + Math.round(baseSalePrice(s, item)).toLocaleString() + "</td>" +
         "<td>" + (s.note || "") + "</td>" +
         "<td style='white-space:nowrap;'>" +
@@ -1472,7 +1521,7 @@ function makeItemCard(item) {
         "</tr>";
     }).join("");
   if (!item.sales || item.sales.length === 0) {
-    table.innerHTML += "<tr><td colspan='10' class='empty-hint'>아직 기록된 판매처가 없습니다.</td></tr>";
+    table.innerHTML += "<tr><td colspan='9' class='empty-hint'>아직 기록된 판매처가 없습니다.</td></tr>";
   }
   const tableWrap = document.createElement("div");
   tableWrap.className = "sales-table-wrap";
