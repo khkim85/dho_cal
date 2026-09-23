@@ -200,7 +200,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-06</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-07</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -1484,11 +1484,12 @@ function makeItemCard(item) {
       const saleId = Number(btn.dataset.saleId);
       const tr = btn.closest("tr");
       const city = tr.querySelector(".sale-edit-city").value.trim();
-      const price = Number(tr.querySelector(".sale-edit-price").value);
+      const priceRaw = tr.querySelector(".sale-edit-price").value;
+      const price = priceRaw !== "" ? Number(priceRaw) : NaN;
       const marketRaw = tr.querySelector(".sale-edit-market").value;
       const marketRate = marketRaw !== "" ? Number(marketRaw) : 100;
       const note = tr.querySelector(".sale-edit-note").value.trim();
-      if (!city || !price) { alert("도시와 판매가를 입력해주세요."); return; }
+      if (!city || priceRaw === "" || Number.isNaN(price)) { alert("도시와 판매가를 입력해주세요."); return; }
       const sale = item.sales.find(s => s.id === saleId);
       sale.city = city;
       sale.price = price;
@@ -1518,11 +1519,12 @@ function makeItemCard(item) {
 
   addRow.querySelector(".sale-add-btn").addEventListener("click", () => {
     const city = addRow.querySelector(".sale-city-input").value.trim();
-    const price = Number(addRow.querySelector(".sale-price-input").value);
+    const priceRaw = addRow.querySelector(".sale-price-input").value;
+    const price = priceRaw !== "" ? Number(priceRaw) : NaN;
     const marketRaw = addRow.querySelector(".sale-market-input").value;
     const marketRate = marketRaw !== "" ? Number(marketRaw) : 100;
     const note = addRow.querySelector(".sale-note-input").value.trim();
-    if (!city || !price) { alert("도시와 판매가를 입력해주세요."); return; }
+    if (!city || priceRaw === "" || Number.isNaN(price)) { alert("도시와 판매가를 입력해주세요."); return; }
     if (!UWO_DATA.ALL_CITIES.includes(city)) { alert("'" + city + "'는 등록된 224개 도시 목록에 없는 이름입니다. 철자를 확인해주세요."); return; }
     if (!item.sales) item.sales = [];
     item.sales.push({ id: nextSaleId++, city, price, marketRate, note });
@@ -1561,8 +1563,9 @@ function makeItemCard(item) {
       const parts = line.split(/\t|,/).map(s => s.trim());
       const city = parts[0];
       const marketRate = (parts[1] !== undefined && parts[1] !== "") ? Number(parts[1]) : 100;
-      const price = Number(parts[2]);
-      if (!city || !price) return;
+      const priceRaw = parts[2];
+      const price = (priceRaw !== undefined && priceRaw !== "") ? Number(priceRaw) : NaN;
+      if (!city || priceRaw === undefined || priceRaw === "" || Number.isNaN(price)) return;
       if (!UWO_DATA.ALL_CITIES.includes(city)) { invalidCities.push(city); return; }
       item.sales.push({ id: nextSaleId++, city, price, marketRate, note: "" });
       added++;
@@ -1776,7 +1779,7 @@ function fillBulkBoxWithScanLines(itemId, linesText) {
 function rowsToLinesText(rows, existingSales) {
   const existing = existingSales || [];
   return (rows || [])
-    .filter(r => r && r.city && r.price)
+    .filter(r => r && r.city && r.price != null && r.price !== "")
     .map(r => ({ ...r, city: correctAiScanName(r.city) }))
     .filter(r => !existing.some(s => s.city === r.city))
     .map(r => r.city + "," + (r.marketRate != null ? r.marketRate : 100) + "," + r.price)
@@ -1819,9 +1822,10 @@ document.getElementById("bulkPasteSubmitBtn").addEventListener("click", () => {
     }
     if (parts.length < 4) { malformed++; return; }
     const [name, city, marketRateRaw, priceRaw] = parts;
-    const price = Number(String(priceRaw).replace(/[^0-9.-]/g, ""));
+    const priceStr = String(priceRaw).replace(/[^0-9.-]/g, "");
+    const price = priceStr !== "" ? Number(priceStr) : NaN;
     const marketRate = marketRateRaw !== "" ? Number(marketRateRaw) : 100;
-    if (!name || !city || !price) { malformed++; return; }
+    if (!name || !city || priceStr === "" || Number.isNaN(price)) { malformed++; return; }
     if (!UWO_DATA.ALL_CITIES.includes(city)) { invalidCityLines.push(line); return; }
     if (!groups[name]) groups[name] = [];
     groups[name].push({ city, marketRate, price });
@@ -1942,7 +1946,7 @@ async function handleAiScanFiles(files) {
         const city = correctAiScanName((entry.city || "").trim());
         (entry.items || []).forEach(it => {
           const name = correctAiScanName(it.itemName);
-          if (!name || !city || !it.price) return;
+          if (!name || !city || it.price == null) return;
           lines.push(name + "," + city + "," + (it.marketRate != null ? it.marketRate : 100) + "," + it.price);
         });
       });
@@ -1966,7 +1970,7 @@ async function handleAiScanFiles(files) {
       ? items.find(i => i.name.trim().toLowerCase() === itemName.toLowerCase())
       : null;
     const linesText = rowsToLinesText(rows, matched ? matched.sales : []);
-    const skipped = rows.filter(r => r && r.city && r.price).length - linesText.split("\n").filter(Boolean).length;
+    const skipped = rows.filter(r => r && r.city && r.price != null && r.price !== "").length - linesText.split("\n").filter(Boolean).length;
 
     if (matched) {
       const skipNote = skipped > 0 ? " (중복 " + skipped + "건은 제외)" : "";
@@ -2049,7 +2053,7 @@ async function handleBulkPasteAiFiles(files) {
       if (rows.length > 0 && itemName) {
         rows.forEach(r => {
           const city = correctAiScanName(r.city);
-          if (!city || !r.price) return;
+          if (!city || r.price == null) return;
           newLines.push(itemName + "," + city + "," + (r.marketRate != null ? r.marketRate : 100) + "," + r.price);
         });
       } else if (itemsByCity.length > 0) {
@@ -2058,7 +2062,7 @@ async function handleBulkPasteAiFiles(files) {
           const city = correctAiScanName((entry.city || "").trim());
           (entry.items || []).forEach(it => {
             const name = correctAiScanName(it.itemName);
-            if (!name || !city || !it.price) return;
+            if (!name || !city || it.price == null) return;
             newLines.push(name + "," + city + "," + (it.marketRate != null ? it.marketRate : 100) + "," + it.price);
           });
         });
