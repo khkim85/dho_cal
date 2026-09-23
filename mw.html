@@ -200,7 +200,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-02</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-03</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -1643,6 +1643,7 @@ function rowsToLinesText(rows, existingSales) {
   const existing = existingSales || [];
   return (rows || [])
     .filter(r => r && r.city && r.price)
+    .map(r => ({ ...r, city: correctAiScanName(r.city) }))
     .filter(r => !existing.some(s => s.city === r.city))
     .map(r => r.city + "," + (r.marketRate != null ? r.marketRate : 100) + "," + r.price)
     .join("\n");
@@ -1755,6 +1756,19 @@ async function fileToBase64(file) {
   });
 }
 
+// AI 스캔(OCR/이미지 인식) 결과가 특정 품목명·도시명을 반복적으로 잘못 읽는 경우를
+// 교정하는 표. 왼쪽(오인식) -> 오른쪽(정답)으로 강제 치환한다.
+// 여기 새 항목을 추가하면 mw.html의 모든 AI 스캔 경로(단건/일괄)에 곧바로 적용된다.
+const AI_SCAN_CORRECTIONS = {
+  "스트로가니아": "스트로가니나",
+  "차이단룩": "차이단륵",
+};
+function correctAiScanName(name) {
+  if (!name) return name;
+  const trimmed = name.trim();
+  return AI_SCAN_CORRECTIONS[trimmed] || name;
+}
+
 async function handleAiScanFiles(files) {
   const statusEl = document.getElementById("aiScanStatus");
   const imageFiles = Array.from(files).filter(f => f.type === "image/png" || f.type === "image/jpeg");
@@ -1783,7 +1797,7 @@ async function handleAiScanFiles(files) {
     }
 
     const data = json.data || {};
-    const itemName = (data.itemName || "").trim();
+    const itemName = correctAiScanName((data.itemName || "").trim());
     const rows = data.rows || [];
     const itemsByCity = data.itemsByCity || [];
 
@@ -1791,10 +1805,11 @@ async function handleAiScanFiles(files) {
     if (rows.length === 0 && itemsByCity.length > 0) {
       const lines = [];
       itemsByCity.forEach(entry => {
-        const city = (entry.city || "").trim();
+        const city = correctAiScanName((entry.city || "").trim());
         (entry.items || []).forEach(it => {
-          if (!it.itemName || !city || !it.price) return;
-          lines.push(it.itemName + "," + city + "," + (it.marketRate != null ? it.marketRate : 100) + "," + it.price);
+          const name = correctAiScanName(it.itemName);
+          if (!name || !city || !it.price) return;
+          lines.push(name + "," + city + "," + (it.marketRate != null ? it.marketRate : 100) + "," + it.price);
         });
       });
       if (lines.length === 0) {
@@ -1893,22 +1908,24 @@ async function handleBulkPasteAiFiles(files) {
       const json = await res.json();
       if (!json.ok) { failCount++; continue; }
       const data = json.data || {};
-      const itemName = (data.itemName || "").trim();
+      const itemName = correctAiScanName((data.itemName || "").trim());
       const rows = data.rows || [];
       const itemsByCity = data.itemsByCity || [];
 
       if (rows.length > 0 && itemName) {
         rows.forEach(r => {
-          if (!r.city || !r.price) return;
-          newLines.push(itemName + "," + r.city + "," + (r.marketRate != null ? r.marketRate : 100) + "," + r.price);
+          const city = correctAiScanName(r.city);
+          if (!city || !r.price) return;
+          newLines.push(itemName + "," + city + "," + (r.marketRate != null ? r.marketRate : 100) + "," + r.price);
         });
       } else if (itemsByCity.length > 0) {
         // 형태 B: 도시 하나 + 여러 품목 — 품목명,도시,시세,가격 형식으로 그대로 뒤집어 넣는다.
         itemsByCity.forEach(entry => {
-          const city = (entry.city || "").trim();
+          const city = correctAiScanName((entry.city || "").trim());
           (entry.items || []).forEach(it => {
-            if (!it.itemName || !city || !it.price) return;
-            newLines.push(it.itemName + "," + city + "," + (it.marketRate != null ? it.marketRate : 100) + "," + it.price);
+            const name = correctAiScanName(it.itemName);
+            if (!name || !city || !it.price) return;
+            newLines.push(name + "," + city + "," + (it.marketRate != null ? it.marketRate : 100) + "," + it.price);
           });
         });
       } else {

@@ -376,6 +376,25 @@ function renderLog() {
 }
 
 let accumulatedRows = []; // 구조화 모드 누적 결과
+
+// AI 스캔 결과가 특정 품목명·도시명을 반복적으로 잘못 읽는 경우를 교정하는 표.
+// 왼쪽(오인식) -> 오른쪽(정답)으로 강제 치환한다. mw.html의 AI_SCAN_CORRECTIONS와 동일하게 유지할 것.
+const AI_SCAN_CORRECTIONS = {
+  "스트로가니아": "스트로가니나",
+  "차이단룩": "차이단륵",
+};
+// row는 필드명이 사용자 설정(fields)에 따라 동적으로 바뀌므로, 특정 키가 아니라
+// row의 모든 문자열 값에 대해 교정표를 적용한다.
+function correctRowValues(row) {
+  const corrected = {};
+  Object.keys(row).forEach(key => {
+    const val = row[key];
+    corrected[key] = (typeof val === "string" && AI_SCAN_CORRECTIONS[val.trim()])
+      ? AI_SCAN_CORRECTIONS[val.trim()]
+      : val;
+  });
+  return corrected;
+}
 let accumulatedFields = [];
 let lastCanvasDataHash = "";
 
@@ -480,7 +499,8 @@ async function scanOnce() {
       accumulatedFields = fields;
       const rows = json.rows || [];
       let addedCount = 0;
-      rows.forEach(row => {
+      rows.forEach(rawRow => {
+        const row = correctRowValues(rawRow);
         const key = rowKey(row, fields);
         if (!accumulatedRows.some(r => rowKey(r, fields) === key)) {
           accumulatedRows.push(row);
