@@ -200,7 +200,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-04</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-05</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -2302,34 +2302,63 @@ function itemsToRows(items) {
   return rows;
 }
 
-// PostgREST(Supabase REST API)는 한 번의 GET에 기본적으로 최대 1000행까지만 반환한다
-// (서버 설정의 max-rows 제한). 지금 데이터가 수천 행이라 이 제한에 걸리면 뒷부분이
-// "에러 없이 조용히" 잘려서, 실제로는 서버에 다 있는데 화면엔 일부만 보이는 상태가 된다.
-// Range 헤더로 페이지를 나눠 끝까지 반복해서 가져와야 전체를 안전하게 확보할 수 있다.
+// get_trade_items() RPC는 DB에서 이미 (itemName 기준) group-by를 끝낸 형태로
+// [{itemId, itemName, source, category, origin, sales:[{saleId, city, price, marketRate, note}]}]
+// 를 그대로 반환한다. 브라우저는 이걸 items 포맷으로 필드명만 맞춰주면 된다.
+function rpcResultToItems(rpcRows) {
+  const map = new Map();
+  let maxItemId = 0;
+  let maxSaleId = 0;
+  rpcRows.forEach(r => {
+    const itemId = Number(r.itemId) || 0;
+    maxItemId = Math.max(maxItemId, itemId);
+    const sales = (r.sales || []).map(s => {
+      const saleId = Number(s.saleId) || 0;
+      maxSaleId = Math.max(maxSaleId, saleId);
+      return {
+        id: saleId,
+        city: s.city,
+        price: s.price != null ? Number(s.price) : null,
+        marketRate: s.marketRate != null ? Number(s.marketRate) : 100,
+        note: s.note || "",
+      };
+    });
+    map.set(r.itemName, {
+      id: itemId, name: r.itemName, source: r.source,
+      category: r.category, origin: r.origin, sales,
+    });
+  });
+  const items = Array.from(map.values()).sort((a, b) => a.id - b.id);
+  return { items, maxItemId, maxSaleId };
+}
+
+// DB에 만들어둔 get_trade_items() RPC 함수를 호출한다. 이 함수가 이미 (itemName
+// 기준) group-by를 끝낸 형태로 결과를 반환하므로, PostgREST의 응답 행 수 상한
+// (일반 GET에서 겪었던 문제)에 걸리지 않고, 요청도 1번으로 끝난다.
 async function loadItemsFromSupabase() {
-  const pageSize = 1000;
-  let allRows = [];
-  let from = 0;
-  while (true) {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/${SUPABASE_TABLE}?select=*`,
-      {
-        headers: {
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
-          Range: `${from}-${from + pageSize - 1}`,
-        },
-      }
-    );
-    if (!res.ok && res.status !== 206) throw new Error("supabase load failed: " + res.status);
-    const page = await res.json();
-    allRows = allRows.concat(page);
-    if (page.length < pageSize) break; // 이번 페이지가 pageSize보다 작으면 더 이상 없다는 뜻
-    from += pageSize;
-  }
-  lastKnownRemoteCount = allRows.length; // 이번에 서버에서 실제로 읽어온 행 수 — 이후 저장 시 안전장치 기준
-  lastKnownRemoteKeys = new Set(allRows.map(r => rowKey(r.itemName, r.city))); // 삭제 diff 계산 기준
-  return rowsToItems(allRows);
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/rpc/get_trade_items`,
+    {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    }
+  );
+  if (!res.ok) throw new Error("supabase load failed: " + res.status);
+  const rpcRows = await res.json();
+  const { items: loadedItems, maxItemId, maxSaleId } = rpcResultToItems(rpcRows);
+
+  // 삭제 diff/안전장치 기준은 여전히 flat한 (itemName, city) 키 집합이 필요하므로,
+  // 로드된 items로부터 다시 만들어 둔다.
+  const flatRows = itemsToRows(loadedItems);
+  lastKnownRemoteCount = flatRows.length;
+  lastKnownRemoteKeys = new Set(flatRows.map(r => rowKey(r.itemName, r.city)));
+
+  return { items: loadedItems, maxItemId, maxSaleId };
 }
 
 // upsert 방식: 서버 전체를 지우지 않고, (품목명+도시) 기준으로 있으면 갱신·없으면 추가한다.
