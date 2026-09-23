@@ -143,6 +143,7 @@
   <textarea id="accumulatedCsv" rows="6" style="width:100%; font-family:monospace;" readonly></textarea>
 </div>
 
+<!--
 <div class="panel">
   <div class="row" style="justify-content:space-between;">
     <h2 style="font-size:15px; margin:0;">오인식 교정 사전</h2>
@@ -164,6 +165,7 @@
     <textarea id="correctionsCodeBox" rows="10" style="width:100%; font-family:monospace;" readonly></textarea>
   </div>
 </div>
+-->
 
 <div class="panel">
 
@@ -414,6 +416,7 @@ function correctRowValues(row) {
   return corrected;
 }
 
+/* -- 오인식 교정 사전 편집 UI: HTML도 함께 주석처리됨, 다른 작업 때 같이 검토 --
 // ── 오인식 교정 사전 편집 UI ──
 // AI_SCAN_CORRECTIONS(corrections.js에서 로드됨)를 화면에서 보고 추가/삭제할 수 있게 한다.
 // 다만 이 편집은 지금 이 브라우저 탭의 메모리에만 있고 서버 저장 기능이 없으므로,
@@ -469,6 +472,7 @@ document.getElementById("copyCorrectionsCodeBtn").addEventListener("click", () =
   box.select();
   navigator.clipboard.writeText(box.value).then(() => showToast("코드를 클립보드에 복사했습니다."));
 });
+*/
 let accumulatedFields = [];
 let lastCanvasDataHash = "";
 

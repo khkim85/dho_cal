@@ -227,7 +227,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-09</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-10</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a></p>
 
 <div class="main-tabs">
@@ -1544,43 +1544,6 @@ function makeItemCard(item) {
       input.closest("tr").querySelector(".sale-save-btn").click();
     });
   });
-
-  const addRow = document.createElement("div");
-  addRow.className = "add-sale-grid";
-  addRow.onclick = (e) => e.stopPropagation();
-  addRow.innerHTML =
-    "<div><label>도시</label><input type='text' class='sale-city-input' list='allCitiesOptions'></div>" +
-    "<div><label>판매가</label><input type='number' class='sale-price-input'></div>" +
-    "<div><label>시세 % (비우면 100)</label><input type='number' class='sale-market-input' placeholder='100'></div>" +
-    "<div><label>비고</label><input type='text' class='sale-note-input'></div>" +
-    "<div style='display:flex; align-items:flex-end;'><button class='primary small sale-add-btn' style='width:100%;'>추가</button></div>";
-  body.appendChild(addRow);
-
-  addRow.querySelector(".sale-add-btn").addEventListener("click", () => {
-    const city = addRow.querySelector(".sale-city-input").value.trim();
-    const priceRaw = addRow.querySelector(".sale-price-input").value;
-    const price = priceRaw !== "" ? Number(priceRaw) : NaN;
-    const marketRaw = addRow.querySelector(".sale-market-input").value;
-    const marketRate = marketRaw !== "" ? Number(marketRaw) : 100;
-    const note = addRow.querySelector(".sale-note-input").value.trim();
-    if (!city || priceRaw === "" || Number.isNaN(price)) { alert("도시와 판매가를 입력해주세요."); return; }
-    if (!UWO_DATA.ALL_CITIES.includes(city)) { alert("'" + city + "'는 등록된 224개 도시 목록에 없는 이름입니다. 철자를 확인해주세요."); return; }
-    if (!item.sales) item.sales = [];
-    item.sales.push({ id: nextSaleId++, city, price, marketRate, note });
-    hasUnsavedChanges = true;
-    renderList();
-  });
-  addRow.querySelectorAll("input").forEach(input => {
-    if (input.classList.contains("sale-city-input")) return;
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); addRow.querySelector(".sale-add-btn").click(); }
-    });
-  });
-  attachAutocompleteEnter(
-    addRow.querySelector(".sale-city-input"),
-    "allCitiesOptions",
-    () => addRow.querySelector(".sale-add-btn").click()
-  );
 
   const bulkBox = document.createElement("div");
   bulkBox.dataset.itemId = item.id;
