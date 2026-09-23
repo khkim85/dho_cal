@@ -68,6 +68,7 @@
   #toast.show { opacity: 1; transform: translateY(0); }
 </style>
 <script src="/usage-log.js"></script>
+<script src="/corrections.js"></script>
 </head>
 <body>
 
@@ -140,6 +141,28 @@
   </div>
   <p class="hint">아래는 누적된 항목을 CSV(콤마 구분) 텍스트로 뽑은 것입니다 — "통합 붙여넣기" 등에 그대로 붙여넣을 수 있습니다.</p>
   <textarea id="accumulatedCsv" rows="6" style="width:100%; font-family:monospace;" readonly></textarea>
+</div>
+
+<div class="panel">
+  <div class="row" style="justify-content:space-between;">
+    <h2 style="font-size:15px; margin:0;">오인식 교정 사전</h2>
+    <button id="toggleCorrectionsBtn">펼치기</button>
+  </div>
+  <p class="hint">AI가 반복적으로 잘못 읽는 품목명·도시명을 강제로 교정합니다. 여기서 추가해도 파일(corrections.js)에 실제로 반영해 배포해야 다음 방문부터 유지됩니다 — 추가 후 아래 코드를 복사해서 corrections.js에 붙여넣어 주세요.</p>
+  <div id="correctionsPanel" style="display:none;">
+    <table class="sales-table" id="correctionsTable"></table>
+    <div class="row" style="margin-top:10px;">
+      <input type="text" id="correctionFromInput" placeholder="오인식 (예: 왕푼)" style="width:160px;">
+      <span>→</span>
+      <input type="text" id="correctionToInput" placeholder="정답 (예: 왐품)" style="width:160px;">
+      <button class="primary" id="addCorrectionBtn">추가</button>
+    </div>
+    <div class="row" style="margin-top:10px; justify-content:space-between;">
+      <span class="hint" style="margin:0;">추가/삭제 후 아래 코드를 corrections.js 파일 내용으로 그대로 교체하세요.</span>
+      <button id="copyCorrectionsCodeBtn">코드 복사</button>
+    </div>
+    <textarea id="correctionsCodeBox" rows="10" style="width:100%; font-family:monospace;" readonly></textarea>
+  </div>
 </div>
 
 <div class="panel">
@@ -377,12 +400,7 @@ function renderLog() {
 
 let accumulatedRows = []; // 구조화 모드 누적 결과
 
-// AI 스캔 결과가 특정 품목명·도시명을 반복적으로 잘못 읽는 경우를 교정하는 표.
-// 왼쪽(오인식) -> 오른쪽(정답)으로 강제 치환한다. mw.html의 AI_SCAN_CORRECTIONS와 동일하게 유지할 것.
-const AI_SCAN_CORRECTIONS = {
-  "스트로가니아": "스트로가니나",
-  "차이단룩": "차이단륵",
-};
+// AI_SCAN_CORRECTIONS는 corrections.js에서 <script>로 불러온다 (mw.html과 공유).
 // row는 필드명이 사용자 설정(fields)에 따라 동적으로 바뀌므로, 특정 키가 아니라
 // row의 모든 문자열 값에 대해 교정표를 적용한다.
 function correctRowValues(row) {
@@ -395,6 +413,62 @@ function correctRowValues(row) {
   });
   return corrected;
 }
+
+// ── 오인식 교정 사전 편집 UI ──
+// AI_SCAN_CORRECTIONS(corrections.js에서 로드됨)를 화면에서 보고 추가/삭제할 수 있게 한다.
+// 다만 이 편집은 지금 이 브라우저 탭의 메모리에만 있고 서버 저장 기능이 없으므로,
+// 다음에 방문해도 유지되게 하려면 "코드 복사"로 얻은 내용을 corrections.js 파일에
+// 실제로 반영해서 배포해야 한다.
+function renderCorrectionsTable() {
+  const table = document.getElementById("correctionsTable");
+  const entries = Object.entries(AI_SCAN_CORRECTIONS);
+  table.innerHTML = "<tr><th>오인식</th><th>정답</th><th></th></tr>" +
+    entries.map(([from, to]) =>
+      "<tr><td>" + from + "</td><td>" + to + "</td><td><button class='small danger correction-del-btn' data-from='" + from.replace(/'/g, "&#39;") + "'>삭제</button></td></tr>"
+    ).join("");
+  table.querySelectorAll(".correction-del-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      delete AI_SCAN_CORRECTIONS[btn.dataset.from];
+      renderCorrectionsTable();
+      renderCorrectionsCode();
+    });
+  });
+}
+function renderCorrectionsCode() {
+  const lines = Object.entries(AI_SCAN_CORRECTIONS)
+    .map(([from, to]) => '  "' + from + '": "' + to + '",')
+    .join("\n");
+  const code =
+    "// AI 스캔(OCR/이미지 인식) 결과가 특정 품목명·도시명을 반복적으로 잘못 읽는 경우를\n" +
+    "// 교정하는 표. 왼쪽(오인식) -> 오른쪽(정답)으로 강제 치환한다.\n" +
+    "// mw.html과 watch.html이 이 파일 하나를 공유해서 쓰므로, 여기 새 항목을\n" +
+    "// 추가하면 두 페이지 모두에 곧바로 적용된다.\n" +
+    "const AI_SCAN_CORRECTIONS = {\n" + lines + "\n};\n";
+  document.getElementById("correctionsCodeBox").value = code;
+}
+document.getElementById("toggleCorrectionsBtn").addEventListener("click", () => {
+  const panel = document.getElementById("correctionsPanel");
+  const willOpen = panel.style.display !== "block";
+  panel.style.display = willOpen ? "block" : "none";
+  document.getElementById("toggleCorrectionsBtn").textContent = willOpen ? "접기" : "펼치기";
+  if (willOpen) { renderCorrectionsTable(); renderCorrectionsCode(); }
+});
+document.getElementById("addCorrectionBtn").addEventListener("click", () => {
+  const from = document.getElementById("correctionFromInput").value.trim();
+  const to = document.getElementById("correctionToInput").value.trim();
+  if (!from || !to) { showToast("오인식과 정답을 모두 입력해주세요."); return; }
+  AI_SCAN_CORRECTIONS[from] = to;
+  document.getElementById("correctionFromInput").value = "";
+  document.getElementById("correctionToInput").value = "";
+  renderCorrectionsTable();
+  renderCorrectionsCode();
+  showToast("추가했습니다. 유지하려면 아래 코드를 corrections.js에 반영해주세요.");
+});
+document.getElementById("copyCorrectionsCodeBtn").addEventListener("click", () => {
+  const box = document.getElementById("correctionsCodeBox");
+  box.select();
+  navigator.clipboard.writeText(box.value).then(() => showToast("코드를 클립보드에 복사했습니다."));
+});
 let accumulatedFields = [];
 let lastCanvasDataHash = "";
 
