@@ -107,7 +107,7 @@
 
 <div id="mapViewport">
   <div id="mapInner">
-    <img id="mapImage" src="/data/mapview/world_map_step4.jpg" alt="세계지도">
+    <img id="mapImage" src="/data/mapview/world_map_new.jpg" alt="세계지도">
   </div>
 </div>
 
@@ -124,11 +124,11 @@
 <script src="/data/mapview/map_data.js"></script>
 <script>
 // ── 좌표 변환 ──
-// 게임 내부 좌표(step4, 캔버스 10000x5881 기준) -> world_map_step4.jpg 픽셀.
-// world_map_step4.jpg는 사용자가 직접 수집한 step4 타일 원본 콜라주(game_world_map_step4_collage.jpg,
-// 5120x2944)에서 타일 로드 실패로 생긴 오른쪽 검정 여백(120px)을 잘라낸 5000x2944 버전.
-// 5000/10000=0.5, 2944/5881=0.500595...로 거의 동일한 배율이라 가로/세로 축 오차가 0.12% 수준으로 작음.
-const MAP_IMG_W = 5000, MAP_IMG_H = 2944; // world_map_step4.jpg 실제 크기
+// 게임 내부 좌표(step4, 캔버스 10000x5881 기준) -> world_map_new.jpg 픽셀.
+// world_map_new.jpg는 new_map.jpg(사용자 업로드)에서 오른쪽 검정 여백(165px)을 잘라낸
+// 7022x4133 버전. landmask.png(7021x4144, SCALE=0.7021 검증됨)와 크기가 거의 동일해서
+// 같은 스케일을 그대로 적용 — 5881*0.7021=4129.0로 실제 높이(4133)와 0.1% 차이.
+const MAP_IMG_W = 7022, MAP_IMG_H = 4133; // world_map_new.jpg 실제 크기
 const GAME_W = 10000, GAME_H = 5881;
 const SCALE_X = MAP_IMG_W / GAME_W;
 const SCALE_Y = MAP_IMG_H / GAME_H;
