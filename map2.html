@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>대항해시대 오리진 - 지도</title>
+<title>대항해시대 오리진 - 지도 (landmask 보정용)</title>
 <style>
   :root {
     --bg: #16181c;
@@ -90,10 +90,11 @@
 </head>
 <body>
 
-<h1>대항해시대 오리진 - 지도</h1>
+<h1>대항해시대 오리진 - 지도 (landmask 보정용)</h1>
 <p class="sub">
+  landmask.png(게임좌표 변환 검증된 흑백 지도) 위에 마커를 직접 찍어서 위치를 확인/보정하는 페이지입니다.
   주황색: 도시(224개) · 초록색: 물물교환 마을(68개) — 마커를 클릭하면 상세 정보를 볼 수 있습니다.
-  <a href="/mw.html">← 교역품 도구로</a>
+  <a href="/map.html">← 컬러 지도로</a> · <a href="/mw.html">← 교역품 도구로</a>
 </p>
 
 <div class="toolbar">
@@ -107,7 +108,7 @@
 
 <div id="mapViewport">
   <div id="mapInner">
-    <img id="mapImage" src="/data/mapview/world_map_step4.jpg" alt="세계지도">
+    <img id="mapImage" src="/data/seaRoute/landmask.png" alt="landmask">
   </div>
 </div>
 
@@ -124,17 +125,14 @@
 <script src="/data/mapview/map_data.js"></script>
 <script>
 // ── 좌표 변환 ──
-// 게임 내부 좌표(step4, 캔버스 10000x5881 기준) -> world_map_step4.jpg 픽셀.
-// world_map_step4.jpg는 사용자가 직접 수집한 step4 타일 원본 콜라주(game_world_map_step4_collage.jpg,
-// 5120x2944)에서 타일 로드 실패로 생긴 오른쪽 검정 여백(120px)을 잘라낸 5000x2944 버전.
-// 5000/10000=0.5, 2944/5881=0.500595...로 거의 동일한 배율이라 가로/세로 축 오차가 0.12% 수준으로 작음.
-const MAP_IMG_W = 5000, MAP_IMG_H = 2944; // world_map_step4.jpg 실제 크기
-const GAME_W = 10000, GAME_H = 5881;
-const SCALE_X = MAP_IMG_W / GAME_W;
-const SCALE_Y = MAP_IMG_H / GAME_H;
+// 게임 내부 좌표(step4, 캔버스 10000x5881 기준) -> landmask.png(7021x4144) 픽셀.
+// landmask.png는 SCALE=0.7021로 게임좌표와 이미 검증된 관계이므로, 중간 이미지(world_map.jpg)를
+// 거치지 않고 직접 변환한다. (map.html은 world_map.jpg 기준으로 여기서 한 단계 더 비율 변환을 거침)
+const GAME_TO_MASK_SCALE = 0.7021;   // landmask.png 폭(7021) / 게임좌표 기준(10000)
+const MAP_IMG_W = 7021, MAP_IMG_H = 4144; // landmask.png 실제 크기
 
 function gameToMapPixel(gx, gy) {
-  return { x: gx * SCALE_X, y: gy * SCALE_Y };
+  return { x: gx * GAME_TO_MASK_SCALE, y: gy * GAME_TO_MASK_SCALE };
 }
 
 // ── 마커 데이터 준비 ──
@@ -222,13 +220,11 @@ if (mapImage.complete && mapImage.naturalWidth > 0) {
 window.addEventListener("resize", fitToViewport);
 
 viewport.addEventListener("mousedown", (e) => {
-  e.preventDefault(); // 브라우저 기본 이미지 드래그(이미지가 커서를 따라다니는 것)를 막는다
   isDragging = true;
   viewport.classList.add("dragging");
   dragStartX = e.clientX; dragStartY = e.clientY;
   originStartX = originX; originStartY = originY;
 });
-mapImage.addEventListener("dragstart", (e) => e.preventDefault());
 window.addEventListener("mousemove", (e) => {
   if (!isDragging) return;
   originX = originStartX + (e.clientX - dragStartX);

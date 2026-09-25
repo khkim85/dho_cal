@@ -132,6 +132,8 @@
   <p class="hint">한 모델이 요청 한도(429)에 걸리면, 다른 모델로 바꿔서 계속 스캔할 수 있습니다 — 모델마다 한도가 별도로 집계됩니다.</p>
   <p class="hint" id="structuredHint">화면에 반복되는 항목에서 뽑아낼 필드명을 콤마로 구분해서 입력하세요 (예: "품목명,도시명"). 스캔할 때마다 그 항목들로 표를 만들어서 보여주고, 아래에 누적 표도 같이 쌓입니다.</p>
   <div class="row" id="extraInstructionRow">
+    <button type="button" class="preset-btn" id="presetCityBtn" title='상단 가운데가 도시, 아래쪽은 순서대로 품목, 시세, 전체판매가. 시세에 "%" 제거, 전체판매가에 "," 제거'>프리셋: 도시 상세</button>
+    <button type="button" class="preset-btn" id="presetItemBtn" title='왼쪽 노랗게 선택된 것이 품목, 오른쪽에서 도시명, 시세, 판매가 추출. 시세에 "%" 제거, 전체판매가에 "," 제거'>프리셋: 보유 추천</button>
     <input type="text" id="extraInstructionInput" placeholder="추가 지시사항 (선택) — 예: 왼쪽 목록에서 강조/선택된 항목 하나만 대상으로 하고, 오른쪽 표 전체를 그 하나에 매칭해라" value='상단 가운데가 도시, 아래쪽은 순서대로 품목, 시세, 전체판매가. 시세에 "%" 제거, 전체판매가에 "," 제거' style="flex:1;">
   </div>
 
@@ -697,6 +699,18 @@ document.getElementById("copyLogBtn").addEventListener("click", () => {
   const text = logEntries.map(e => "[" + e.time + "] " + e.text).join("\n\n");
   navigator.clipboard.writeText(text).then(() => {
     alert("전체 기록을 클립보드에 복사했습니다.");
+  });
+});
+
+// ── 추가 지시사항 프리셋 ──────────────
+const EXTRA_INSTRUCTION_PRESETS = {
+  presetCityBtn: '상단 가운데가 도시, 아래쪽은 순서대로 품목, 시세, 전체판매가. 시세에 "%" 제거, 전체판매가에 "," 제거',
+  presetItemBtn: '왼쪽 노랗게 선택된 것이 품목, 오른쪽에서 도시명, 시세, 판매가 추출. 시세에 "%" 제거, 전체판매가에 "," 제거',
+};
+Object.keys(EXTRA_INSTRUCTION_PRESETS).forEach(btnId => {
+  document.getElementById(btnId).addEventListener("click", () => {
+    document.getElementById("extraInstructionInput").value = EXTRA_INSTRUCTION_PRESETS[btnId];
+    saveToLocalStorage();
   });
 });
 
