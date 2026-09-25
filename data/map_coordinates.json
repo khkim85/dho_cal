@@ -1128,6 +1128,11 @@
     }
   },
   "villages": {
+    "프랑크족의 마을": {
+      "code": "village_estimated",
+      "x": 4944,
+      "y": 1432
+    },
     "스비아인의 마을": {
       "code": "village_1",
       "x": 5192,
