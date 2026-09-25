@@ -220,11 +220,13 @@ mapImage.addEventListener("load", () => {
 window.addEventListener("resize", fitToViewport);
 
 viewport.addEventListener("mousedown", (e) => {
+  e.preventDefault(); // 브라우저 기본 이미지 드래그(이미지가 커서를 따라다니는 것)를 막는다
   isDragging = true;
   viewport.classList.add("dragging");
   dragStartX = e.clientX; dragStartY = e.clientY;
   originStartX = originX; originStartY = originY;
 });
+mapImage.addEventListener("dragstart", (e) => e.preventDefault());
 window.addEventListener("mousemove", (e) => {
   if (!isDragging) return;
   originX = originStartX + (e.clientX - dragStartX);
