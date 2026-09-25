@@ -208,10 +208,15 @@ function fitToViewport() {
   applyTransform();
 }
 
-mapImage.addEventListener("load", () => {
+function initMap() {
   fitToViewport();
   renderMarkers();
-});
+}
+if (mapImage.complete && mapImage.naturalWidth > 0) {
+  initMap();
+} else {
+  mapImage.addEventListener("load", initMap);
+}
 window.addEventListener("resize", fitToViewport);
 
 viewport.addEventListener("mousedown", (e) => {
