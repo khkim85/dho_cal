@@ -221,13 +221,12 @@
   .city-grid-cell.empty { opacity: 0.5; }
 </style>
 <script src="/usage-log.js"></script>
-<script src="/corrections.js"></script>
 </head>
 <body>
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-25-01</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-25-02</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a> · <a href="/map.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🗺️ 지도 보기 →</a></p>
 
 <div class="main-tabs">
@@ -250,6 +249,7 @@
   <button id="checkInvalidCitiesBtn">🔍 잘못된 도시명 검사</button>
   <button id="showSummaryBtn">📊 등록 현황 요약</button>
   <button id="showCityGridBtn">🗺️ 도시별 물물교환 등록 현황</button>
+  <button id="showCorrectionsBtn">📖 오인식 교정 사전</button>
   <span id="remoteStatus" style="font-size:12px;"></span>
 </div>
 
@@ -264,10 +264,32 @@
   </div>
 </div>
 
-<div class="panel" id="summaryPanel" style="display:none;">
-  <h2>품목별 등록 현황</h2>
-  <p class="hint">전체 224개 도시 기준, 품목별로 몇 개 도시에 판매 기록이 등록되었는지 보여줍니다.</p>
-  <div id="summaryList"></div>
+<div class="modal-overlay" id="correctionsModal">
+  <div class="modal-box">
+    <div class="row modal-header">
+      <h2 style="margin:0;">오인식 교정 사전</h2>
+      <button class="modal-close-btn" id="closeCorrectionsBtn">&times;</button>
+    </div>
+    <p class="hint">AI 스캔이 반복적으로 잘못 읽는 품목명·도시명을 등록합니다. 여기서 추가/삭제하면 즉시 저장되고, 이후 모든 스캔(mw/watch)에 곧바로 반영됩니다.</p>
+    <table class="sales-table" id="correctionsTable"></table>
+    <div class="row" style="margin-top:12px; gap:8px;">
+      <input type="text" id="correctionFromInput" placeholder="오인식 (예: 왕푼)" style="width:160px;">
+      <span>→</span>
+      <input type="text" id="correctionToInput" placeholder="정답 (예: 왐품)" style="width:160px;">
+      <button class="primary" id="addCorrectionBtn">추가</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="summaryModal">
+  <div class="modal-box">
+    <div class="row modal-header">
+      <h2 style="margin:0;">품목별 등록 현황</h2>
+      <button class="modal-close-btn" id="closeSummaryBtn">&times;</button>
+    </div>
+    <p class="hint">전체 224개 도시 기준, 품목별로 몇 개 도시에 판매 기록이 등록되었는지 보여줍니다.</p>
+    <div id="summaryList"></div>
+  </div>
 </div>
 
 <div class="panel" id="invalidCitiesPanel" style="display:none;">
@@ -1945,7 +1967,25 @@ async function fileToBase64(file) {
   });
 }
 
-// AI_SCAN_CORRECTIONS는 corrections.js에서 <script>로 불러온다 (mw.html/watch.html 공유).
+// AI_SCAN_CORRECTIONS(오인식->정답 교정표)는 Supabase "aiCorrections" 테이블에서 불러온다.
+// mw.html/watch.html 둘 다 이 방식을 쓰므로, 한쪽에서 추가하면 즉시 양쪽에 반영된다.
+let AI_SCAN_CORRECTIONS = {};
+async function loadAiCorrections() {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/aiCorrections?select=fromWord,toWord`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (!res.ok) return;
+    const rows = await res.json();
+    const map = {};
+    rows.forEach(r => { map[r.fromWord] = r.toWord; });
+    AI_SCAN_CORRECTIONS = map;
+  } catch (e) {
+    // 실패해도 조용히 넘어간다 — 교정 사전이 비어있으면 그냥 원문 그대로 쓰일 뿐,
+    // 스캔 자체를 막을 정도의 문제는 아니다.
+  }
+}
 function correctAiScanName(name) {
   if (!name) return name;
   const trimmed = name.trim();
@@ -2355,9 +2395,7 @@ function renderInvalidCities() {
 }
 
 function renderSummary() {
-  const panel = document.getElementById("summaryPanel");
   const list = document.getElementById("summaryList");
-  panel.style.display = "block";
 
   const totalCities = UWO_DATA.ALL_CITIES.length;
   const rows = items
@@ -2386,9 +2424,14 @@ document.getElementById("checkInvalidCitiesBtn").addEventListener("click", () =>
 });
 
 document.getElementById("showSummaryBtn").addEventListener("click", () => {
-  const panel = document.getElementById("summaryPanel");
-  if (panel.style.display === "block") { panel.style.display = "none"; return; }
   renderSummary();
+  document.getElementById("summaryModal").classList.add("open");
+});
+document.getElementById("closeSummaryBtn").addEventListener("click", () => {
+  document.getElementById("summaryModal").classList.remove("open");
+});
+document.getElementById("summaryModal").addEventListener("click", (e) => {
+  if (e.target.id === "summaryModal") document.getElementById("summaryModal").classList.remove("open");
 });
 
 // ── 도시별 물물교환 등록 현황 (진짜 팝업 모달) ──
@@ -2442,6 +2485,76 @@ document.getElementById("closeCityGridBtn").addEventListener("click", () => {
 // 오버레이의 어두운 배경(모달 박스 바깥) 클릭 시에도 닫히게 한다
 document.getElementById("cityGridModal").addEventListener("click", (e) => {
   if (e.target.id === "cityGridModal") document.getElementById("cityGridModal").classList.remove("open");
+});
+
+// ── 오인식 교정 사전 (진짜 팝업 모달, Supabase aiCorrections 테이블과 직접 연동) ──
+function renderCorrectionsModal() {
+  const table = document.getElementById("correctionsTable");
+  const entries = Object.entries(AI_SCAN_CORRECTIONS).sort((a, b) => a[0].localeCompare(b[0], "ko"));
+  if (entries.length === 0) {
+    table.innerHTML = "<tr><td class='empty-hint'>등록된 교정 항목이 없습니다.</td></tr>";
+    return;
+  }
+  table.innerHTML = "<tr><th>오인식</th><th>정답</th><th></th></tr>" +
+    entries.map(([from, to]) =>
+      "<tr><td>" + from + "</td><td>" + to + "</td><td><button class='small danger correction-del-btn' data-from=\"" + from.replace(/"/g, "&quot;") + "\">삭제</button></td></tr>"
+    ).join("");
+  table.querySelectorAll(".correction-del-btn").forEach(btn => {
+    btn.addEventListener("click", () => deleteCorrection(btn.dataset.from));
+  });
+}
+async function addCorrection() {
+  const from = document.getElementById("correctionFromInput").value.trim();
+  const to = document.getElementById("correctionToInput").value.trim();
+  if (!from || !to) { alert("오인식과 정답을 모두 입력해주세요."); return; }
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/aiCorrections?on_conflict=fromWord`,
+      {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify([{ fromWord: from, toWord: to }]),
+      }
+    );
+    if (!res.ok) throw new Error("save failed: " + res.status);
+    AI_SCAN_CORRECTIONS[from] = to;
+    document.getElementById("correctionFromInput").value = "";
+    document.getElementById("correctionToInput").value = "";
+    renderCorrectionsModal();
+  } catch (e) {
+    alert("저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
+  }
+}
+async function deleteCorrection(from) {
+  if (!confirm("'" + from + "' 교정 항목을 삭제할까요?")) return;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/aiCorrections?fromWord=eq.${encodeURIComponent(from)}`,
+      { method: "DELETE", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (!res.ok) throw new Error("delete failed: " + res.status);
+    delete AI_SCAN_CORRECTIONS[from];
+    renderCorrectionsModal();
+  } catch (e) {
+    alert("삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
+  }
+}
+document.getElementById("showCorrectionsBtn").addEventListener("click", () => {
+  renderCorrectionsModal();
+  document.getElementById("correctionsModal").classList.add("open");
+});
+document.getElementById("closeCorrectionsBtn").addEventListener("click", () => {
+  document.getElementById("correctionsModal").classList.remove("open");
+});
+document.getElementById("correctionsModal").addEventListener("click", (e) => {
+  if (e.target.id === "correctionsModal") document.getElementById("correctionsModal").classList.remove("open");
+});
+document.getElementById("addCorrectionBtn").addEventListener("click", addCorrection);
+document.getElementById("correctionToInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") addCorrection();
 });
 
 // ── 원격 저장 (Supabase 단일화) ──
@@ -2832,7 +2945,7 @@ function cleanupOldBoosts() {
 }
 
 (async function init() {
-  const remoteOk = await loadFromRemote();
+  const [remoteOk] = await Promise.all([loadFromRemote(), loadAiCorrections()]);
   if (!remoteOk) loadFromLocalStorage(); // 원격 실패 시에만 로컬 백업으로 대체
   if (craftMaterials.length === 0) {
     craftMaterials = CRAFT_MATERIAL_SEED.entries.map(e => ({...e}));
