@@ -219,6 +219,9 @@
   .city-grid-cell.full { border-color: #7ec996; }
   .city-grid-cell.full .city-grid-count { color: #7ec996; }
   .city-grid-cell.empty { opacity: 0.5; }
+  .city-grid-cell.near-full { cursor: pointer; border-color: #f2b84b; }
+  .city-grid-cell.near-full .city-grid-count { color: #f2b84b; }
+  .city-grid-cell.near-full:hover { background: #2a2e34; }
 </style>
 <script src="/usage-log.js"></script>
 </head>
@@ -259,8 +262,19 @@
       <h2 style="margin:0;">도시별 물물교환 등록 현황</h2>
       <button class="modal-close-btn" id="closeCityGridBtn">&times;</button>
     </div>
-    <p class="hint">각 도시마다 (등록된 물물교환 품목 수 / 전체 물물교환 품목 수)를 보여줍니다. 지역별로 묶여 있습니다.</p>
+    <p class="hint">각 도시마다 (등록된 물물교환 품목 수 / 전체 물물교환 품목 수)를 보여줍니다. 지역별로 묶여 있습니다. <span style="color:#f2b84b;">노란 테두리</span>는 10개 이하로 모자란 도시 — 클릭하면 뭐가 빠졌는지 볼 수 있습니다.</p>
     <div id="cityGridBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="missingItemsModal">
+  <div class="modal-box">
+    <div class="row modal-header">
+      <h2 style="margin:0;" id="missingItemsTitle">-</h2>
+      <button class="modal-close-btn" id="closeMissingItemsBtn">&times;</button>
+    </div>
+    <p class="hint">아래 품목들이 이 도시에 아직 등록되지 않았습니다.</p>
+    <div id="missingItemsList"></div>
   </div>
 </div>
 
@@ -2478,15 +2492,41 @@ function renderCityGrid() {
     const cities = byRegion[region].sort((a, b) => a.localeCompare(b, "ko"));
     const cells = cities.map(city => {
       const count = countByCity[city] || 0;
-      const cls = count === totalBarter ? "full" : (count === 0 ? "empty" : "");
-      return "<div class='city-grid-cell " + cls + "'>" +
+      const missing = totalBarter - count;
+      const nearFull = missing > 0 && missing <= 10;
+      const cls = count === totalBarter ? "full" : (count === 0 ? "empty" : (nearFull ? "near-full" : ""));
+      return "<div class='city-grid-cell " + cls + "'" + (nearFull ? " data-city=\"" + city.replace(/"/g, "&quot;") + "\"" : "") + ">" +
         "<span class='city-grid-name'>" + city + "</span>" +
         "<span class='city-grid-count'>" + count + " / " + totalBarter + "</span>" +
         "</div>";
     }).join("");
     return "<div class='city-grid-region'><h3>" + region + " (" + cities.length + "개 도시)</h3><div class='city-grid'>" + cells + "</div></div>";
   }).join("");
+
+  body.querySelectorAll(".city-grid-cell.near-full").forEach(cell => {
+    cell.addEventListener("click", () => showMissingItems(cell.dataset.city, barterItems, countByCity));
+  });
 }
+
+function showMissingItems(city, barterItems, countByCity) {
+  const cityItems = barterItems.filter(it => !(it.sales || []).some(s => s.city === city));
+  document.getElementById("missingItemsTitle").textContent = city + " — 미등록 품목 (" + cityItems.length + "개)";
+  const list = document.getElementById("missingItemsList");
+  if (cityItems.length === 0) {
+    list.innerHTML = "<div class='empty-hint'>미등록 품목이 없습니다.</div>";
+  } else {
+    list.innerHTML = "<div class='city-grid'>" +
+      cityItems.map(it => "<div class='city-grid-cell'><span class='city-grid-name'>" + it.name + "</span></div>").join("") +
+      "</div>";
+  }
+  document.getElementById("missingItemsModal").classList.add("open");
+}
+document.getElementById("closeMissingItemsBtn").addEventListener("click", () => {
+  document.getElementById("missingItemsModal").classList.remove("open");
+});
+document.getElementById("missingItemsModal").addEventListener("click", (e) => {
+  if (e.target.id === "missingItemsModal") document.getElementById("missingItemsModal").classList.remove("open");
+});
 document.getElementById("showCityGridBtn").addEventListener("click", () => {
   renderCityGrid();
   document.getElementById("cityGridModal").classList.add("open");
