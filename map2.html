@@ -219,22 +219,35 @@ if (mapImage.complete && mapImage.naturalWidth > 0) {
 }
 window.addEventListener("resize", fitToViewport);
 
-viewport.addEventListener("mousedown", (e) => {
+// Pointer Capture 사용: 드래그 중 마우스가 브라우저 창 밖으로 나가서 버튼을 놔도
+// pointerup을 확실히 받기 위함. (기존 mousedown/mousemove/mouseup 방식은 창 밖에서
+// 버튼을 놓으면 mouseup을 못 받아 isDragging이 계속 true로 남는 버그가 있었음 —
+// 그 뒤로는 버튼 없이 마우스만 움직여도 지도가 계속 따라오는 것처럼 보임.)
+function endDrag(e) {
+  if (!isDragging) return;
+  isDragging = false;
+  viewport.classList.remove("dragging");
+  if (e && viewport.hasPointerCapture && viewport.hasPointerCapture(e.pointerId)) {
+    viewport.releasePointerCapture(e.pointerId);
+  }
+}
+viewport.addEventListener("pointerdown", (e) => {
+  if (e.button !== undefined && e.button !== 0) return;
   isDragging = true;
   viewport.classList.add("dragging");
+  viewport.setPointerCapture(e.pointerId);
   dragStartX = e.clientX; dragStartY = e.clientY;
   originStartX = originX; originStartY = originY;
 });
-window.addEventListener("mousemove", (e) => {
+viewport.addEventListener("pointermove", (e) => {
   if (!isDragging) return;
   originX = originStartX + (e.clientX - dragStartX);
   originY = originStartY + (e.clientY - dragStartY);
   applyTransform();
 });
-window.addEventListener("mouseup", () => {
-  isDragging = false;
-  viewport.classList.remove("dragging");
-});
+viewport.addEventListener("pointerup", endDrag);
+viewport.addEventListener("pointercancel", endDrag);
+window.addEventListener("blur", () => endDrag());
 
 viewport.addEventListener("wheel", (e) => {
   e.preventDefault();
