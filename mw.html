@@ -402,6 +402,13 @@
   <select id="filterOrigin"><option value="">획득처 전체</option></select>
 </div>
 
+<div class="row" id="bulkDeleteRow" style="margin:8px 0; gap:8px; align-items:center;">
+  <label style="display:flex; align-items:center; gap:4px; font-size:13px;">
+    <input type="checkbox" id="selectAllItemsCheckbox"> 전체 선택
+  </label>
+  <button class="small danger" id="bulkDeleteBtn" disabled>선택 삭제 (0개)</button>
+</div>
+
 <div class="item-list" id="itemList"></div>
 </div>
 
@@ -1119,6 +1126,7 @@ let nextSaleId = 1;
 let openItemId = null;
 let editingSaleId = null;
 let editingItemId = null;
+let selectedItemIds = new Set();
 
 let boosts = []; // {id, time(ISO), region, kind, items:[{name, priceRange}]}
 
@@ -1181,10 +1189,12 @@ function renderList() {
       ? "위 '교역품 등록' 버튼으로 교역품을 추가하세요."
       : "조건에 맞는 교역품이 없습니다.";
     container.appendChild(hint);
+    updateBulkDeleteToolbar();
     return;
   }
 
   list.forEach(item => container.appendChild(makeItemCard(item)));
+  updateBulkDeleteToolbar();
 }
 
 // ── 분류별 할증표 (개인 캐릭터 보너스 — 본계정 기준, 실측 확정값) ──
@@ -1300,6 +1310,18 @@ function makeItemCard(item) {
   const head = document.createElement("div");
   head.className = "item-head";
 
+  const selectBox = document.createElement("input");
+  selectBox.type = "checkbox";
+  selectBox.className = "item-select-checkbox";
+  selectBox.style.cssText = "margin-right:8px; flex-shrink:0;";
+  selectBox.checked = selectedItemIds.has(item.id);
+  selectBox.onclick = (e) => e.stopPropagation();
+  selectBox.onchange = () => {
+    if (selectBox.checked) selectedItemIds.add(item.id);
+    else selectedItemIds.delete(item.id);
+    updateBulkDeleteToolbar();
+  };
+
   const left = document.createElement("div");
   left.style.display = "flex";
   left.style.flexDirection = "column";
@@ -1362,6 +1384,7 @@ function makeItemCard(item) {
     reorderBox.appendChild(downBtn);
   }
 
+  head.appendChild(selectBox);
   head.appendChild(left);
   head.appendChild(bestLabel);
   head.appendChild(reorderBox);
@@ -2306,6 +2329,35 @@ document.getElementById("filterCategory").addEventListener("change", (e) => {
 document.getElementById("filterOrigin").addEventListener("change", (e) => {
   filterOrigin = e.target.value;
   renderList();
+});
+
+// ── 일괄 삭제 ──────────────────────────────────────
+function updateBulkDeleteToolbar() {
+  const btn = document.getElementById("bulkDeleteBtn");
+  const n = selectedItemIds.size;
+  btn.textContent = "선택 삭제 (" + n + "개)";
+  btn.disabled = n === 0;
+  const visibleIds = Array.from(document.querySelectorAll(".item-select-checkbox")).length;
+  const checkedVisible = Array.from(document.querySelectorAll(".item-select-checkbox")).filter(c => c.checked).length;
+  document.getElementById("selectAllItemsCheckbox").checked = visibleIds > 0 && checkedVisible === visibleIds;
+}
+document.getElementById("selectAllItemsCheckbox").addEventListener("change", (e) => {
+  const checked = e.target.checked;
+  document.querySelectorAll(".item-select-checkbox").forEach(cb => {
+    cb.checked = checked;
+    cb.dispatchEvent(new Event("change"));
+  });
+});
+document.getElementById("bulkDeleteBtn").addEventListener("click", () => {
+  const n = selectedItemIds.size;
+  if (n === 0) return;
+  if (!confirm(n + "개 교역품과 기록된 판매 정보를 모두 삭제할까요? 되돌릴 수 없습니다.")) return;
+  items = items.filter(i => !selectedItemIds.has(i.id));
+  selectedItemIds.clear();
+  hasUnsavedChanges = true;
+  saveToLocalStorage();
+  scheduleRemoteSave();
+  render();
 });
 
 // ── 저장/불러오기 ──────────────────────────────────
