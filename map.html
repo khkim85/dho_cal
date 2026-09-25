@@ -107,7 +107,7 @@
 
 <div id="mapViewport">
   <div id="mapInner">
-    <img id="mapImage" src="/data/mapview/world_map.jpg" alt="세계지도">
+    <img id="mapImage" src="/data/mapview/world_map_step4.jpg" alt="세계지도">
   </div>
 </div>
 
@@ -124,20 +124,17 @@
 <script src="/data/mapview/map_data.js"></script>
 <script>
 // ── 좌표 변환 ──
-// 게임 내부 좌표(step4, 캔버스 10000x5881 기준) -> 이 페이지의 지도 이미지(world_map.jpg, step3 축소본) 픽셀.
-// 검증 근거: landmask.png(7021x4144, SCALE=0.7021로 게임좌표와 이미 검증된 관계)를 매개로,
-// world_map.jpg가 그 landmask와 동일 비율의 다른 해상도 렌더링이라는 점을 8개 도시(안코나,
-// 베네치아,이스탄불,리우데자네이루,다바오,북경,케이프타운,리스본) 픽셀 대조로 확인함.
-const GAME_TO_MASK_SCALE = 0.7021;   // landmask.png 폭(7021) / 게임좌표 기준(10000)
-const MASK_W = 7021, MASK_H = 4144;  // landmask.png 크기
-const MAP_IMG_W = 2414, MAP_IMG_H = 1419; // world_map.jpg 실제 크기
-const RATIO_X = MAP_IMG_W / MASK_W;
-const RATIO_Y = MAP_IMG_H / MASK_H;
+// 게임 내부 좌표(step4, 캔버스 10000x5881 기준) -> world_map_step4.jpg 픽셀.
+// world_map_step4.jpg는 사용자가 직접 수집한 step4 타일 원본 콜라주(game_world_map_step4_collage.jpg,
+// 5120x2944)에서 타일 로드 실패로 생긴 오른쪽 검정 여백(120px)을 잘라낸 5000x2944 버전.
+// 5000/10000=0.5, 2944/5881=0.500595...로 거의 동일한 배율이라 가로/세로 축 오차가 0.12% 수준으로 작음.
+const MAP_IMG_W = 5000, MAP_IMG_H = 2944; // world_map_step4.jpg 실제 크기
+const GAME_W = 10000, GAME_H = 5881;
+const SCALE_X = MAP_IMG_W / GAME_W;
+const SCALE_Y = MAP_IMG_H / GAME_H;
 
 function gameToMapPixel(gx, gy) {
-  const maskPx = gx * GAME_TO_MASK_SCALE;
-  const maskPy = gy * GAME_TO_MASK_SCALE;
-  return { x: maskPx * RATIO_X, y: maskPy * RATIO_Y };
+  return { x: gx * SCALE_X, y: gy * SCALE_Y };
 }
 
 // ── 마커 데이터 준비 ──
