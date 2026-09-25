@@ -227,7 +227,7 @@
 
 <h1>교역품 판매처 기록 도구</h1>
 <p class="sub">물물교환·명산품 교역품을 등록하고, 지역/도시별 판매가를 기록해서 어디서 파는 게 가장 이득인지 누적합니다.</p>
-<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-23-13</p>
+<p style="font-size:11px; color:var(--text-muted); margin:-8px 0 12px;" id="buildStamp">build: 2026-09-25-01</p>
 <p style="margin:-4px 0 16px;"><a href="/watch.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🖥️ 화면 감시 도구 →</a> · <a href="/map.html" style="font-size:12px; color:var(--text-muted); text-decoration:underline;">🗺️ 지도 보기 →</a></p>
 
 <div class="main-tabs">
@@ -2444,16 +2444,14 @@ document.getElementById("cityGridModal").addEventListener("click", (e) => {
   if (e.target.id === "cityGridModal") document.getElementById("cityGridModal").classList.remove("open");
 });
 
-// ── 원격 저장 (이원화: items는 Supabase / 나머지는 기존 Apps Script 웹앱) ──
+// ── 원격 저장 (Supabase 단일화) ──
 // localStorage는 "그 브라우저에서만" 남는 백업용으로 계속 두고,
-// 진짜 영구 저장은 아래 두 백엔드로 나눠서 이루어진다.
-//   - items(교역품+판매기록): Supabase "tradeGood" 테이블 (REST API 직접 호출)
-//   - boosts/checklistCategories/craftMaterials/collectionItems: 기존 Apps Script 그대로
-// 두 키 모두 이 파일 소스에 그대로 노출되므로(공개 사이트라 view-source 가능),
+// 진짜 영구 저장은 전부 Supabase로 이루어진다.
+//   - items(교역품+판매기록): "tradeGood" 테이블 (REST API 직접 호출)
+//   - boosts/checklistCategories/craftMaterials/collectionItems: "appState" 테이블
+//     (key='appData' 한 행에 JSON 통째로 upsert — 기존 구글시트 Apps Script 방식을 대체)
+// 키가 이 파일 소스에 그대로 노출되므로(공개 사이트라 view-source 가능),
 // "아무나 실수로 못 건드리게" 하는 가벼운 잠금 정도로만 취급할 것.
-const REMOTE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw8vdCX0Lt6sPk-kwwgr-cnT2D5QMzj7zFVWz9fe8AsYxCkQcZLavPa-jpZ8rzCkGSmSg/exec";
-const REMOTE_WRITE_KEY = "drummer4";
-
 const SUPABASE_URL = "https://xbmpwzpeojeuiahhiybn.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Zmq5GtvX-NZ85UazzaWWpg_BREbcVBn";
 const SUPABASE_TABLE = "tradeGood";
@@ -2683,11 +2681,13 @@ async function loadFromRemote() {
 
   const restPromise = (async () => {
     try {
-      const url = REMOTE_WEBAPP_URL + "?key=" + encodeURIComponent(REMOTE_WRITE_KEY);
-      const res = await fetch(url);
-      const json = await res.json();
-      if (!json.ok) return false;
-      const data = json.data || {};
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/appState?key=eq.appData&select=data`,
+        { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+      );
+      if (!res.ok) return false;
+      const rows = await res.json();
+      const data = (rows[0] && rows[0].data) || {};
       boosts = data.boosts || [];
       nextBoostId = data.nextBoostId || (boosts.length + 1);
       checklistCategories = data.checklistCategories || [];
@@ -2723,15 +2723,23 @@ async function saveToRemoteNow() {
 
   const restPromise = (async () => {
     try {
-      const res = await fetch(REMOTE_WEBAPP_URL, {
-        method: "POST",
-        // text/plain으로 보내야 브라우저가 CORS 프리플라이트(OPTIONS)를 안 보내고,
-        // Apps Script 쪽에서는 e.postData.contents를 그냥 JSON으로 파싱한다.
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ key: REMOTE_WRITE_KEY, data: { boosts, nextBoostId, checklistCategories, nextCategoryId, nextChecklistItemId, craftMaterials, nextCraftMaterialId, collectionItems, nextCollectionItemId } }),
-      });
-      const json = await res.json();
-      return !!json.ok;
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/appState?on_conflict=key`,
+        {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates,return=minimal",
+          },
+          body: JSON.stringify([{
+            key: "appData",
+            data: { boosts, nextBoostId, checklistCategories, nextCategoryId, nextChecklistItemId, craftMaterials, nextCraftMaterialId, collectionItems, nextCollectionItemId },
+          }]),
+        }
+      );
+      return res.ok;
     } catch (e) {
       return false;
     }
@@ -2755,8 +2763,8 @@ async function saveToRemoteNow() {
       "페이지를 새로고침한 뒤 다시 시도해 주세요."
     );
   } else if (!itemsOk || !restOk) {
-    const which = !itemsOk && !restOk ? "교역품 판매기록(Supabase)과 일정/체크리스트(구글시트) 모두"
-      : !itemsOk ? "교역품 판매기록(Supabase)" : "일정/체크리스트(구글시트)";
+    const which = !itemsOk && !restOk ? "교역품 판매기록과 일정/체크리스트 모두"
+      : !itemsOk ? "교역품 판매기록" : "일정/체크리스트";
     alert("⚠️ 자동 저장 실패\n\n" + which + " 저장에 실패했습니다.\n네트워크 상태를 확인하고, 잠시 후 다시 시도됩니다.\n(로컬에는 저장되어 있으니 작업 내용 자체는 안전합니다.)");
   }
 }
