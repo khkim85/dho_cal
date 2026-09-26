@@ -705,7 +705,7 @@ document.getElementById("copyLogBtn").addEventListener("click", () => {
 // ── 추가 지시사항 프리셋 ──────────────
 const EXTRA_INSTRUCTION_PRESETS = {
   presetCityBtn: '상단 가운데가 도시, 아래쪽은 순서대로 품목, 시세, 전체판매가. 시세에 "%" 제거, 전체판매가에 "," 제거',
-  presetItemBtn: '왼쪽 목록에서 노랗게 강조된 항목 하나만 대상으로 하고 오른쪽 표 전체를 그 하나에 매칭, 시세에 "%" 제거, 전체판매가에 "," 제거',
+  presetItemBtn: '시세에 "%" 제거, 전체판매가에 "," 제거, 품목명은 ',
 };
 Object.keys(EXTRA_INSTRUCTION_PRESETS).forEach(btnId => {
   document.getElementById(btnId).addEventListener("click", () => {
