@@ -110,9 +110,6 @@
     <button type="button" class="preset-btn" id="presetItemBtn" title='오른쪽 표에서 도시명, 시세, 전체판매가만 행별로 추출해라. 시세에 "%" 제거, 전체판매가에 "," 제거'>프리셋: 보유 추천</button>
     <input type="text" id="extraInstructionInput" placeholder="추가 지시사항 (선택) — 예: 왼쪽 목록에서 강조/선택된 항목 하나만 대상으로 하고, 오른쪽 표 전체를 그 하나에 매칭해라" value='오른쪽 표에서 도시명, 시세, 전체판매가만 행별로 추출해라. 시세에 "%" 제거, 전체판매가에 "," 제거' style="flex:1;">
   </div>
-  <div class="row" id="manualItemNameRow">
-    <input type="text" id="manualItemNameInput" placeholder="품목명 직접 입력 (비워두면 AI가 화면에서 추출 시도) — 흑백 캡처라 색 강조 인식이 안 될 때 사용" style="flex:1;">
-  </div>
 
 
   <div class="capture-area" id="captureArea">
@@ -165,7 +162,6 @@ function saveToLocalStorage() {
       accumulatedRows, accumulatedFields,
       fields: document.getElementById("fieldsInput").value,
       extraInstruction: document.getElementById("extraInstructionInput").value,
-      manualItemName: document.getElementById("manualItemNameInput").value,
       mode: document.getElementById("modeSelect").value,
       interval: document.getElementById("intervalSelect").value,
     }));
@@ -181,7 +177,6 @@ function loadFromLocalStorage() {
     accumulatedFields = data.accumulatedFields || [];
     if (data.fields != null) document.getElementById("fieldsInput").value = data.fields;
     if (data.extraInstruction != null) document.getElementById("extraInstructionInput").value = data.extraInstruction;
-    if (data.manualItemName != null) document.getElementById("manualItemNameInput").value = data.manualItemName;
     if (data.mode != null) document.getElementById("modeSelect").value = data.mode;
     if (data.interval != null) document.getElementById("intervalSelect").value = data.interval;
   } catch (e) { /* 복원 실패해도 빈 상태로 시작 */ }
@@ -363,7 +358,6 @@ document.getElementById("modeSelect").addEventListener("change", () => {
   document.getElementById("fieldsInput").style.display = structured ? "" : "none";
   document.getElementById("structuredHint").style.display = structured ? "" : "none";
   document.getElementById("extraInstructionRow").style.display = structured ? "" : "none";
-  document.getElementById("manualItemNameRow").style.display = structured ? "" : "none";
 });
 
 async function scanOnce() {
@@ -397,10 +391,8 @@ async function scanOnce() {
       const fields = getFields();
       accumulatedFields = fields;
       const rows = json.rows || [];
-      const manualItemName = document.getElementById("manualItemNameInput").value.trim();
       let addedCount = 0;
       rows.forEach(row => {
-        if (manualItemName && fields.includes("품목명")) row["품목명"] = manualItemName;
         const key = rowKey(row, fields);
         if (!accumulatedRows.some(r => rowKey(r, fields) === key)) {
           accumulatedRows.push(row);
